@@ -53,10 +53,14 @@ input:focus{border-color:var(--fuel)}
 .swatches{display:flex;gap:10px;margin-top:8px;flex-wrap:wrap}
 .sw{width:44px;height:44px;border-radius:10px;border:3px solid transparent;min-height:0;padding:0}
 .sw.on{border-color:var(--text)}
-.swc{position:relative;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;background:conic-gradient(#ff4d4d,#ffd84a,#3dd68c,#2dd4d4,#3e8bff,#b07cff,#ff5fa2,#ff4d4d)}
+.swc{position:relative;display:flex;align-items:center;justify-content:center;background:conic-gradient(#ff4d4d,#ffd84a,#3dd68c,#2dd4d4,#3e8bff,#b07cff,#ff5fa2,#ff4d4d)}
 .swc span{font:700 24px/1 var(--disp);color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.7);pointer-events:none}
-.swc input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:0;padding:0}
-.swc:focus-within{outline:2px solid var(--fuel);outline-offset:2px}
+.swc.mine::after{content:'';position:absolute;right:-1px;bottom:-1px;width:16px;height:16px;border-radius:50%;border:2px solid var(--bg);background:conic-gradient(#ff4d4d,#ffd84a,#3dd68c,#2dd4d4,#3e8bff,#b07cff,#ff5fa2,#ff4d4d)}
+.cw-wrap{position:relative;margin:14px auto 10px;touch-action:none}
+.cw{display:block;border-radius:50%;cursor:crosshair;touch-action:none}.cw:focus{outline:3px solid var(--fuel);outline-offset:3px}
+.cw-knob{position:absolute;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.5),0 2px 6px rgba(0,0,0,.5);pointer-events:none}
+.cw-l{display:block;margin-top:6px}.cw-v{width:100%;accent-color:var(--fuel)}
+.cw-prev{width:44px;height:44px;border-radius:10px;border:2px solid var(--line);flex:none}
 /* top bar */
 .topbar{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
 .teamno{font-family:var(--disp);font-weight:700;font-size:22px}
@@ -35550,17 +35554,59 @@ let SETUP_PREFILL=null;   // {num,name,color,have:[years]} when adding a season 
 /* robot color: the preset swatches plus a custom one that opens the system color picker */
 const COLOR_NAMES={'#3E8BFF':'Blue','#E5484D':'Red','#F5C518':'Yellow','#3DD68C':'Green','#B07CFF':'Purple','#FF8A3D':'Orange','#FF5FA2':'Pink','#E8ECF1':'White','#2DD4D4':'Teal'};
 const isHex=c=>/^#[0-9a-f]{6}$/i.test(c||'');
+const isCustom=c=>isHex(c)&&!TEAM_COLORS.some(t=>t.toLowerCase()===c.toLowerCase());
 function customSwatch(){
-  const c=SAVE.color, mine=isHex(c)&&!TEAM_COLORS.includes(c.toUpperCase())&&!TEAM_COLORS.includes(c);
-  return `<label class="sw swc ${mine?'on':''}" id="swc" style="${mine?`background:${c}`:''}" title="Custom color">
-    <input type="color" id="cpick" value="${isHex(c)?c.toLowerCase():'#ff5fa2'}" aria-label="Custom color">${mine?'':`<span aria-hidden="true">+</span>`}</label>`;
+  const c=isCustom(SAVE.color)?SAVE.color:isCustom(SAVE.customColor)?SAVE.customColor:null, on=isCustom(SAVE.color);   // keeps showing your last custom color
+  return `<button class="sw swc ${on?'on':''} ${c?'mine':''}" id="swc" style="${c?`background:${c}`:''}" aria-label="${c?'Custom color '+c+' — tap to change':'Custom color'}"><span aria-hidden="true">${c?'':'+'}</span></button>`;
 }
 function wireCustomSwatch(root){
-  const sw=root.querySelector('#swc'), inp=root.querySelector('#cpick'); if(!sw||!inp) return;
-  const pick=()=>{const c=inp.value; if(!isHex(c)) return; SAVE.color=c; sw.style.background=c; const sp=sw.querySelector('span'); if(sp) sp.remove();
-    root.querySelectorAll('.sw').forEach(x=>x.classList.toggle('on',x===sw))};
-  inp.addEventListener('input',pick); inp.addEventListener('change',pick);
-  sw.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();inp.click()}});   // TV remote / keyboard
+  const sw=root.querySelector('#swc'); if(!sw) return;
+  sw.onclick=()=>colorWheelSheet(isCustom(SAVE.color)?SAVE.color:isCustom(SAVE.customColor)?SAVE.customColor:'#ff5fa2',c=>{
+    SAVE.color=c; SAVE.customColor=c; sw.style.background=c; sw.classList.add('mine'); sw.querySelector('span').textContent=''; sw.setAttribute('aria-label','Custom color '+c+' — tap to change');
+    root.querySelectorAll('.sw').forEach(x=>x.classList.toggle('on',x===sw));
+  });
+}
+/* color wheel: hue around the ring, saturation toward the edge, a brightness slider underneath */
+const hsv2hex=(h,s,v)=>{const f=n=>{const k=(n+h/60)%6;return v-v*s*Math.max(0,Math.min(k,4-k,1))};return '#'+[f(5),f(3),f(1)].map(x=>Math.round(x*255).toString(16).padStart(2,'0')).join('')};
+const hex2hsv=hex=>{const n=parseInt(hex.slice(1),16),r=(n>>16)/255,g=(n>>8&255)/255,b=(n&255)/255,mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn;
+  let h=0;if(d){h=mx===r?((g-b)/d)%6:mx===g?(b-r)/d+2:(r-g)/d+4;h*=60;if(h<0)h+=360}return {h,s:mx?d/mx:0,v:mx}};
+function colorWheelSheet(start,onPick){
+  let {h,s,v}=hex2hsv(start); if(v<.35) v=.35;
+  const el=sheet(`<h2>Pick a robot color</h2>
+    <div class="cw-wrap"><canvas id="cw" class="cw" tabindex="0" aria-label="Color wheel. Arrow keys change the color."></canvas><div class="cw-knob" id="cwk"></div></div>
+    <label for="cwv" class="cw-l">Brightness</label><input type="range" id="cwv" class="cw-v" min="35" max="100" value="${Math.round(v*100)}">
+    <div class="row" style="gap:12px;align-items:center;margin-top:14px"><span class="cw-prev" id="cwp"></span><code id="cwx" class="grow"></code>
+      <button class="btn-primary" id="cwok" style="min-width:120px">Use color</button></div>`);
+  const cv=el.querySelector('#cw'), knob=el.querySelector('#cwk'), vr=el.querySelector('#cwv'), prev=el.querySelector('#cwp'), hx=el.querySelector('#cwx');
+  const S=Math.min(300,Math.round(el.querySelector('.sheet').clientWidth-40)), dpr=window.devicePixelRatio||1, R=S/2;
+  cv.width=S*dpr; cv.height=S*dpr; cv.style.width=cv.style.height=S+'px'; el.querySelector('.cw-wrap').style.width=el.querySelector('.cw-wrap').style.height=S+'px';
+  const ctx=cv.getContext('2d');
+  function draw(){   // drawn once at full brightness; the slider dims it with a CSS filter (same as scaling V)
+    const W=cv.width, img=ctx.createImageData(W,W), r0=W/2, d8=img.data;
+    for(let y=0;y<W;y++)for(let x=0;x<W;x++){const dx=x-r0,dy=y-r0,d=Math.hypot(dx,dy)/r0,i=(y*W+x)*4;if(d>1)continue;
+      const hh=((Math.atan2(dy,dx)*180/Math.PI+360)%360)/60;
+      for(const [o,n] of [[0,5],[1,3],[2,1]]){const k=(n+hh)%6;d8[i+o]=255*(1-d*Math.max(0,Math.min(k,4-k,1)))}
+      d8[i+3]=d>.985?(1-d)/.015*255:255}
+    ctx.putImageData(img,0,0);
+  }
+  const dim=()=>{cv.style.filter=`brightness(${v})`};
+  function show(){const c=hsv2hex(h,s,v), a=h*Math.PI/180;
+    knob.style.left=(R+Math.cos(a)*s*R)+'px'; knob.style.top=(R+Math.sin(a)*s*R)+'px'; knob.style.background=c;
+    prev.style.background=c; hx.textContent=c.toUpperCase()}
+  function at(e){const b=cv.getBoundingClientRect(), x=e.clientX-b.left-R, y=e.clientY-b.top-R;
+    h=(Math.atan2(y,x)*180/Math.PI+360)%360; s=Math.min(1,Math.hypot(x,y)/R); show()}
+  let drag=false;
+  cv.addEventListener('pointerdown',e=>{drag=true;cv.setPointerCapture(e.pointerId);at(e)});
+  cv.addEventListener('pointermove',e=>{if(drag)at(e)});
+  cv.addEventListener('pointerup',()=>drag=false);
+  cv.addEventListener('keydown',e=>{const k=e.key;   // TV remote / keyboard
+    if(k==='ArrowLeft'||k==='ArrowRight'){h=(h+(k==='ArrowRight'?10:350))%360}
+    else if(k==='ArrowUp'||k==='ArrowDown'){s=Math.max(0,Math.min(1,s+(k==='ArrowUp'?.1:-.1)))} else return;
+    e.preventDefault(); e.stopPropagation(); show()});
+  vr.oninput=()=>{v=vr.value/100; dim(); show()};
+  el.querySelector('#cwok').onclick=()=>{onPick(hsv2hex(h,s,v)); el.remove()};
+  draw(); dim(); show();
+  return el;
 }
 function screenSetup(){
   const pre=SAVE.team?null:SETUP_PREFILL, t=SAVE.team||(pre?{num:pre.num,name:pre.name}:{num:'',name:''}), isNew=!SAVE.team;
@@ -36242,7 +36288,7 @@ function screenPractice(prev){
    A random install ID (no name, email or device info) plus small events: app opened, robot created, match played,
    replay / video / share / guide used. Batched, sent to the BOTS Admin database, never shown to other players.
    Players can turn it off from the main menu; the queue is dropped when they do. */
-const APP_VERSION='4.23';
+const APP_VERSION='4.24';
 const TELE_KEY='bots_usage_v1';
 const uuid4=()=>{if(window.crypto&&crypto.randomUUID)return crypto.randomUUID();const b=new Uint8Array(16);crypto.getRandomValues(b);b[6]=b[6]&15|64;b[8]=b[8]&63|128;
   const h=[...b].map(x=>x.toString(16).padStart(2,'0')).join('');return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`};
@@ -36558,6 +36604,7 @@ if('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('messa
 /* ---------- what's new: shown once after BOTS updates ----------
    Notes ship with the app. App-wide notes show for everyone; season notes only for seasons this player can play. */
 const WHATS_NEW=[
+  {v:'4.24',app:['Custom robot colors now open a color wheel. Your color stays in the list next to the others; tap it again to fine-tune.']},
   {v:'4.23',app:['Robots can be pink now, or any color you like: tap the rainbow swatch when building or editing a robot to open a color picker.',
     'Anonymous usage stats now also count which country and state or region BOTS is played in. Only the place is counted, never your address.']},
   {v:'4.22',app:['After an update, BOTS now shows what changed. Tap the version number on the main menu to see it again.'],

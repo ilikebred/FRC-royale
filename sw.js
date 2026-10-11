@@ -1,8 +1,8 @@
-/* BOTS service worker — version 0dbfd9dc3c
+/* BOTS service worker — version e07fc6340a
    The game is one self-contained page, so it is cached whole and plays offline.
    Pages: network first (picks up new versions), falling back to the cache when offline.
    Same-origin files: cache first. Anything else (the Supabase leaderboard) always goes to the network. */
-const CACHE='bots-0dbfd9dc3c', FILES=["./", "index.html", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/maskable-512.png", "icons/apple-touch-icon.png"];
+const CACHE='bots-e07fc6340a', FILES=["./", "index.html", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/maskable-512.png", "icons/apple-touch-icon.png"];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k.startsWith('bots-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
 self.addEventListener('fetch',e=>{
