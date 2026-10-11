@@ -53,6 +53,10 @@ input:focus{border-color:var(--fuel)}
 .swatches{display:flex;gap:10px;margin-top:8px;flex-wrap:wrap}
 .sw{width:44px;height:44px;border-radius:10px;border:3px solid transparent;min-height:0;padding:0}
 .sw.on{border-color:var(--text)}
+.swc{position:relative;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;background:conic-gradient(#ff4d4d,#ffd84a,#3dd68c,#2dd4d4,#3e8bff,#b07cff,#ff5fa2,#ff4d4d)}
+.swc span{font:700 24px/1 var(--disp);color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.7);pointer-events:none}
+.swc input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:0;padding:0}
+.swc:focus-within{outline:2px solid var(--fuel);outline-offset:2px}
 /* top bar */
 .topbar{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
 .teamno{font-family:var(--disp);font-weight:700;font-size:22px}
@@ -30348,7 +30352,7 @@ const FUTURE_SEASONS=[{year:2027,name:'Revealed Jan 2027'}];
 const SEASON_ORDER=[];   // playable seasons, newest first (filled once every season file has loaded)
 const curYear=()=>SAVE&&SAVE.season||2026;
 const leagueOf=(tr,p)=>{let i=0;leagues(p).forEach((l,k)=>{if(tr>=l.min)i=k});return i};
-const TEAM_COLORS=['#3E8BFF','#E5484D','#F5C518','#3DD68C','#B07CFF','#FF8A3D','#E8ECF1','#2DD4D4'];
+const TEAM_COLORS=['#3E8BFF','#E5484D','#F5C518','#3DD68C','#B07CFF','#FF8A3D','#FF5FA2','#E8ECF1','#2DD4D4'];
 const NAME_A=['Iron','Voltage','Quantum','Copper','Circuit','Thunder','Pixel','Rogue','Apex','Neon','Torque','Byte','Atomic','Steel','Cosmic','Turbo','Binary','Rocket','Static','Gamma','Nitro','Vector','Echo','Polar'];
 const NAME_B=['Panthers','Wolves','Gearheads','Hornets','Owls','Mechs','Falcons','Sparks','Titans','Bots','Knights','Comets','Raptors','Foxes','Badgers','Otters','Squad','Engineers','Rams','Herons','Yetis','Lynx'];
 
@@ -35543,6 +35547,21 @@ const teamDesc=t=>t.d?districtName(t.d)+' District':'Regional team';
 
 /* ---------- setup ---------- */
 let SETUP_PREFILL=null;   // {num,name,color,have:[years]} when adding a season to an existing team
+/* robot color: the preset swatches plus a custom one that opens the system color picker */
+const COLOR_NAMES={'#3E8BFF':'Blue','#E5484D':'Red','#F5C518':'Yellow','#3DD68C':'Green','#B07CFF':'Purple','#FF8A3D':'Orange','#FF5FA2':'Pink','#E8ECF1':'White','#2DD4D4':'Teal'};
+const isHex=c=>/^#[0-9a-f]{6}$/i.test(c||'');
+function customSwatch(){
+  const c=SAVE.color, mine=isHex(c)&&!TEAM_COLORS.includes(c.toUpperCase())&&!TEAM_COLORS.includes(c);
+  return `<label class="sw swc ${mine?'on':''}" id="swc" style="${mine?`background:${c}`:''}" title="Custom color">
+    <input type="color" id="cpick" value="${isHex(c)?c.toLowerCase():'#ff5fa2'}" aria-label="Custom color">${mine?'':`<span aria-hidden="true">+</span>`}</label>`;
+}
+function wireCustomSwatch(root){
+  const sw=root.querySelector('#swc'), inp=root.querySelector('#cpick'); if(!sw||!inp) return;
+  const pick=()=>{const c=inp.value; if(!isHex(c)) return; SAVE.color=c; sw.style.background=c; const sp=sw.querySelector('span'); if(sp) sp.remove();
+    root.querySelectorAll('.sw').forEach(x=>x.classList.toggle('on',x===sw))};
+  inp.addEventListener('input',pick); inp.addEventListener('change',pick);
+  sw.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();inp.click()}});   // TV remote / keyboard
+}
 function screenSetup(){
   const pre=SAVE.team?null:SETUP_PREFILL, t=SAVE.team||(pre?{num:pre.num,name:pre.name}:{num:'',name:''}), isNew=!SAVE.team;
   const have=y=>!!(pre&&pre.have.includes(y));
@@ -35559,7 +35578,7 @@ function screenSetup(){
       <div><label for="tn">Team number</label><input id="tn" type="number" inputmode="numeric" min="1" max="99999" placeholder="e.g. 254" value="${esc(t.num)}"></div>
       <div id="found" class="found" aria-live="polite"></div>
       <div id="tmwrap" hidden><label for="tm">Team name</label><input id="tm" type="text" maxlength="40" placeholder="e.g. Circuit Cats" value="${esc(t.num&&teamDB(selYear).BY_NUM.get(+t.num)?'':t.name)}"></div>
-      <div><label>Robot color</label><div class="swatches">${TEAM_COLORS.map(c=>`<button class="sw ${c===SAVE.color?'on':''}" style="background:${c}" data-c="${c}" aria-label="Color ${c}"></button>`).join('')}</div></div>
+      <div><label>Robot color</label><div class="swatches">${TEAM_COLORS.map(c=>`<button class="sw ${c===SAVE.color?'on':''}" style="background:${c}" data-c="${c}" aria-label="${COLOR_NAMES[c]||'Color '+c}"></button>`).join('')}${customSwatch()}</div></div>
     </div>
     <div><label>Season${isNew?'':' (set when the robot was built)'}</label><div class="seasons" style="margin-top:8px">
       ${(isNew?OPEN:[SAVE.season]).map(y=>`<button class="season ${y===selYear?'on':''}" data-year="${y}" ${isNew&&!have(y)?'':'disabled'} ${have(y)?'style="opacity:.45"':''}><div class="y">${y}</div><div class="disp" style="color:var(--fuel);font-weight:700">${SEASONS[y].name}</div><div class="muted" style="font-size:12px">${have(y)?'Already built':SEASONS[y].tagline}</div></button>`).join('')}
@@ -35584,7 +35603,8 @@ function screenSetup(){
   };
   tn.oninput=lookup; lookup();
   app.querySelectorAll('[data-year]').forEach(b=>b.onclick=()=>{selYear=+b.dataset.year;app.querySelectorAll('[data-year]').forEach(x=>x.classList.toggle('on',x===b));lookup()});
-  app.querySelectorAll('.sw').forEach(b=>b.onclick=()=>{SAVE.color=b.dataset.c;app.querySelectorAll('.sw').forEach(x=>x.classList.toggle('on',x===b))});
+  app.querySelectorAll('.sw[data-c]').forEach(b=>b.onclick=()=>{SAVE.color=b.dataset.c;app.querySelectorAll('.sw').forEach(x=>x.classList.toggle('on',x===b))});
+  wireCustomSwatch(app);
   $('#go').onclick=()=>{
     const num=parseInt(tn.value,10), real=teamDB(selYear).BY_NUM.get(num), name=real?real.name:tm.value.trim();
     if(!(num>=1&&num<=99999)) return toast('Enter a team number from 1 to 99999');
@@ -36222,7 +36242,7 @@ function screenPractice(prev){
    A random install ID (no name, email or device info) plus small events: app opened, robot created, match played,
    replay / video / share / guide used. Batched, sent to the BOTS Admin database, never shown to other players.
    Players can turn it off from the main menu; the queue is dropped when they do. */
-const APP_VERSION='4.22';
+const APP_VERSION='4.23';
 const TELE_KEY='bots_usage_v1';
 const uuid4=()=>{if(window.crypto&&crypto.randomUUID)return crypto.randomUUID();const b=new Uint8Array(16);crypto.getRandomValues(b);b[6]=b[6]&15|64;b[8]=b[8]&63|128;
   const h=[...b].map(x=>x.toString(16).padStart(2,'0')).join('');return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`};
@@ -36268,6 +36288,17 @@ function telePing(force){
     body:JSON.stringify({p_install:TELE.id,p_platform:telePlatform(),p_version:APP_VERSION,p_screen:teleScreen()})}).catch(()=>{});
 }
 setInterval(()=>telePing(false),15000);
+/* where BOTS is played: once a day, the server notes this connection's country and state/region as a plain count
+   (no address, device ID or player is kept with it). Only with usage stats on. */
+function geoPing(){
+  if(!TELE.on||typeof LB_URL==='undefined'||!/^https?:$/.test(location.protocol)&&!window.BotsNative) return;
+  const day=new Date().toISOString().slice(0,10); if(TELE.geoDay===day) return;
+  const first=!TELE.geoDay;
+  fetch(LB_URL+'/functions/v1/geo-ping',{method:'POST',headers:{apikey:LB_KEY,'Content-Type':'application/json'},body:JSON.stringify({first})})
+    .then(r=>{if(r.ok||r.status===429){TELE.geoDay=day;teleSave()}}).catch(()=>{});
+}
+setTimeout(geoPing,6000);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')geoPing()});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')telePing(true)});
 /* what the robot looked like in a match — feeds the admin app's season meta analysis */
 const ARCHETYPES=['Starter Bot','Balanced Build','Scoring Specialist','Endgame Specialist','Speed & Defense','All-Rounder','Powerhouse'];
@@ -36298,7 +36329,8 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 function usageSheet(onClose){
   const el=sheet(`<h2>Anonymous usage stats</h2>
     <p class="muted">BOTS can send anonymous gameplay stats to help improve the game: when the app is opened, robots created, matches played (season, score, result) and which features get used.</p>
-    <p class="muted">It uses a random ID made on this device — no name, email, contacts or location. Leaderboard nicknames are separate and only sent if you join.</p>
+    <p class="muted">It also counts which country and state or region BOTS is played in, once a day, worked out from your internet connection. Only the place is counted; your internet address isn’t stored and the count isn’t linked to you or your device.</p>
+    <p class="muted">It uses a random ID made on this device — no name, email, contacts or exact location. Leaderboard nicknames are separate and only sent if you join.</p>
     <div class="row" style="gap:8px;margin-top:10px"><button class="grow ${TELE.on?'btn-primary':'btn-ghost'}" id="uon">On</button><button class="grow ${TELE.on?'btn-ghost':'btn-primary'}" id="uoff">Off</button></div>`,onClose);
   el.querySelector('#uon').onclick=()=>{setTeleOn(true);el.remove();onClose&&onClose()};
   el.querySelector('#uoff').onclick=()=>{setTeleOn(false);el.remove();onClose&&onClose()};
@@ -36526,6 +36558,8 @@ if('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('messa
 /* ---------- what's new: shown once after BOTS updates ----------
    Notes ship with the app. App-wide notes show for everyone; season notes only for seasons this player can play. */
 const WHATS_NEW=[
+  {v:'4.23',app:['Robots can be pink now, or any color you like: tap the rainbow swatch when building or editing a robot to open a color picker.',
+    'Anonymous usage stats now also count which country and state or region BOTS is played in. Only the place is counted, never your address.']},
   {v:'4.22',app:['After an update, BOTS now shows what changed. Tap the version number on the main menu to see it again.'],
     seasons:{
       2026:['New FEED step for custom autos: work your half of the neutral zone and pass FUEL back into your zone, ready for TELEOP. It repeats until AUTO ends.',
@@ -36637,7 +36671,7 @@ function screenLeaderboard(back,opts={}){
           tele('lb_join'); resavePush(); setTimeout(refreshConfig,500);
           LBS={id,secret,nickname:nick,joined:Date.now()}; lbSave(); toast('Welcome to the leaderboard, '+nick+'!');
           await lbSyncAll(); renderMe(); load()}
-        catch(e){btn.disabled=false;toast(e.code==='42501'?'This device can’t join the leaderboard — it was removed by the admin':e.code==='22023'?'That nickname isn’t allowed — try another':/taken|23505/.test(e.message+e.code)?'That nickname is taken — try another':navigator.onLine===false?'You’re offline — try again when connected':'Couldn’t join: '+e.message)}
+        catch(e){btn.disabled=false;toast(e.code==='42501'?'This device can’t join the leaderboard — it was removed by the admin':e.code==='22023'?'That nickname isn’t allowed — try another':e.code==='429'?'Too many new players from this network right now — try again in an hour':/taken|23505/.test(e.message+e.code)?'That nickname is taken — try another':navigator.onLine===false?'You’re offline — try again when connected':'Couldn’t join: '+e.message)}
       };
     } else {
       meBox.innerHTML=`<div class="card row" style="gap:10px"><div class="grow" style="min-width:0"><div class="muted" style="font-size:12px">Listed as</div><b class="disp" style="font-size:20px">${esc(LBS.nickname)}</b><div class="muted" id="lbrank" style="font-size:12px"></div></div>

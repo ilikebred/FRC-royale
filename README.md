@@ -8,4 +8,3 @@ The game shows an **Install BOTS** card on the main menu when it's opened in a b
 - **Android, ChromeOS, desktop Chrome / Edge:** tap **Install**. (Or **⋮ → Install app**.)
 - **iPhone / iPad (Safari or Chrome):** follow the card: **Share → Add to Home Screen**.
 - **Mac Safari:** **File → Add to Dock**.
-
