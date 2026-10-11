@@ -282,6 +282,7 @@ html.tv body{font-size:17px}
 #app.tvmatch>.boosts button{min-height:56px}
 /* announcements + locked seasons */
 .bell{position:relative}.bell .badge{position:absolute;top:4px;right:4px;min-width:18px;height:18px;border-radius:9px;background:var(--red);color:#fff;font:700 11px/18px var(--body);padding:0 5px}
+.wn{margin:6px 0 0;padding-left:18px}.wn li{margin:5px 0;font-size:14px;line-height:1.35}.wns{margin-top:10px}
 .ann{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:12px}.annic{color:var(--fuel);flex:none;margin-top:2px}
 .seasonchip.locked{opacity:.55;cursor:default}.seasonchip.locked .ss svg{width:12px;height:12px;vertical-align:-2px}
 .season.soon{opacity:.6;border-style:dashed}
@@ -30525,6 +30526,7 @@ SEASONS[2026].autoSteps={
   depot:{name:'Collect · Depot',short:'DEPOT',desc:'Grab the 24 FUEL staged in your depot'},
   outpost:{name:'Collect · Outpost',short:'OUTPOST',desc:'Your human player feeds FUEL down the chute'},
   cycle:{name:'Neutral cycles (repeat)',short:'CYCLE',desc:'Run out to our half of the neutral zone, grab a load, shoot, and repeat until AUTO ends'},
+  feed:{name:'Feed · Neutral Zone (repeat)',short:'FEED',desc:'Work our half of the neutral zone and pass FUEL back into our alliance zone, ready for TELEOP. Repeats until AUTO ends'},
   climb:{name:'Climb LEVEL 1',short:'CLIMB',desc:'Hang on the TOWER for 15 (needs a climber, 2 robots max)'},
 };
 SEASONS[2026].autoPresets=[
@@ -30534,6 +30536,7 @@ SEASONS[2026].autoPresets=[
   {id:'p-cycle',name:'Center Cycler',start:'C',steps:['score','cycle'],preset:true},
   {id:'p-outpost',name:'Outpost Feed',start:'R',steps:['score','outpost','score'],preset:true},
   {id:'p-hang',name:'Shoot and Hang',start:'R',steps:['score','climb'],preset:true},
+  {id:'p-feed',name:'Neutral Feeder',start:'C',steps:['score','feed'],preset:true},
 ];
 const START_POS={L:[4.5,44.6],C:[13.5,46.2],R:[22.5,44.6]};
 const AUTO_STEPS_OF=()=>SEASONS[curYear()].autoSteps;
@@ -30562,6 +30565,8 @@ SEASONS[2026].estimateAuto=function(auto,st){
       fuel+=got;note=trips+' trip'+(trips===1?'':'s')+' · '+got+' scored · repeats until AUTO ends';t=Math.min(Math.max(t,0),20)}
     if(s==='depot'){go(pts.depot);const n=Math.min(st.cap-held,depot);depot-=n;t+=n/st.intake+.4;held+=n;note='+'+n+' FUEL'}
     if(s==='outpost'){go(pts.outpost);const n=Math.min(st.cap-held,outpost);outpost-=n;t+=n/2.2+.4;held+=n;note='+'+n+' FUEL'}
+    if(s==='feed'){go(pts.neutral);const per=1/Math.min(st.intake,4)+.15, n=Math.max(0,Math.floor((20-t)/per)+held);
+      held=0;note='≈ '+n+' FUEL passed to our zone · repeats until AUTO ends';t=Math.max(t,20)}
     if(s==='climb'){if(st.climb>0){go(pts.climb);t+=st.climbTime*.6;climbed=true;note='+15 if it fits'}else note='no climber'}
     rows.push({s,t,note});
   }
@@ -30679,7 +30684,7 @@ class Match{
   }
   setGoal(r,g){
     const changed=!r.goal||r.goal.type!==g.type||Math.abs(r.goal.x-g.x)+Math.abs(r.goal.y-g.y)>1.2;
-    r.goal=g; if(changed) this.planPath(r,g);
+    r.goal=g; if(changed||(!r.path.length&&Math.hypot(r.x-g.x,r.y-g.y)>1.5)) this.planPath(r,g);   // also re-plan when shoved off the spot
   }
   think(r){
     const t=this.t, ph=this.phase(), A=r.A;
@@ -30746,7 +30751,7 @@ class Match{
     const shoot=()=>{r.mode='shoot';if(!r.spot)r.spot=this.shootSpot(r);this.setGoal(r,{type:'shoot',...r.spot})};
     for(let guard=0;guard<4;guard++){
       const s=r.autoPlan[r.autoIdx]; if(!s){r.autoPlan=null;return false}
-      const next=()=>{r.autoIdx++;r.spot=null;r.goal=null;r.path=[];r.fed=0;r.stepT=0;r.cyc=null};
+      const next=()=>{r.autoIdx++;r.spot=null;r.goal=null;r.path=[];r.fed=0;r.stepT=0;r.cyc=null;r.autoFeed=false};
       if(s==='score'){if(r.held===0){next();continue} shoot(); return true}
       if(s==='cycle'){ // neutral → shoot → neutral … until AUTO ends
         if(r.cyc==='shoot'){if(r.held>0){shoot();return true} r.cyc='collect';r.stepT=0;r.spot=null}
@@ -30760,6 +30765,11 @@ class Match{
       if(s==='outpost'){
         if(r.held>=r.st.cap||this.outpost[A]<=0){next();continue}
         r.mode='outpost'; this.setGoal(r,{type:'outpost',...M(A,24.4,50.9)}); return true}
+      if(s==='feed'){ // work our half of the neutral zone and pass FUEL into our alliance zone until AUTO ends
+        r.autoFeed=true; r.mode='feed';
+        const f=r.held<r.st.cap?this.pickFuel(r,inNeutral):null;
+        if(!f&&r.held===0){next();continue}
+        this.setGoal(r,{type:'feed',...(f||M(A,13.5,32))}); return true}
       if(s==='climb'){
         if(!r.planClimb||r.autoLv>0){next();continue}
         r.mode='climb'; this.setGoal(r,{type:'climb',auto:true,...r.towerSpot}); return true}
@@ -30937,7 +30947,7 @@ class Match{
   }
   shoot(r,dt){
     const h=this.hub(r.A); r.turretA=Math.atan2(h.y-r.y,h.x-r.x);
-    if(r.feed>0){ // pass FUEL from the neutral zone into our alliance zone
+    if(r.feed>0||(r.autoFeed&&this.t<this.R.auto)){ // pass FUEL from the neutral zone into our alliance zone (FEED boost or a FEED auto step)
       const inN=r.y>BAR.T+.5&&r.y<BAR.B-.5;
       if(!inN||r.held<=0){r.shotAcc=0;return}
       r.turretA=Math.atan2(h.y-r.y,h.x-r.x);
@@ -32144,7 +32154,8 @@ function genEstimateAuto(S,auto,st){
       else if(d.area&&!c.floor&&!d.station) note='needs a floor intake';
       else {go(d.at&&d.at(st)||null);const n=d.fill?c.cap-(held?held.n:0):1;t+=(d.area&&c.floor?c.load*n+.3*n:(d.loadTime||c.load+1.2))*GEN_AUTO_F;held={k:d.piece,n:(held?held.n:0)+n};note='+'+n+' '+(G.pieces[d.piece].name||d.piece)}}
     else if(d.kind==='climb'){if(d.ok&&!d.ok(st))note=d.no||'can’t do that';else{go(d.at&&d.at(st)||null);t+=d.time?d.time(st):3;const p=d.pts?d.pts(st):0;pts+=p;note='+'+p+(d.note?' '+d.note:'')}}
-    else if(d.kind==='special'){go(d.at&&d.at(st)||null);t+=d.time?d.time(st):1;const p=d.pts?d.pts(st):0;pts+=p;note=d.note||('+'+p)}
+    else if(d.kind==='special'){if(d.needsHeld&&!(held&&held.n>0))note='nothing to '+d.short.toLowerCase();
+      else{go(d.at&&d.at(st)||null);t+=d.time?d.time(st):1;const p=d.pts?d.pts(st):0;pts+=p;note=d.note||('+'+p);if(d.needsHeld)held=null}}
     rows.push({s:id,t,note});
   }
   if(G.leaveY!=null&&!left&&auto.steps.some(s=>G.autoSteps[s]&&G.autoSteps[s].kind!=='climb')) left=true;
@@ -34697,6 +34708,11 @@ defineSeason(Y,{
     midA:{kind:'get',piece:'note',area:[0,25,11,29],at:()=>[5,27],name:'Pick up · Center line (amp side)',short:'MID A',desc:'Race to the center line for a NOTE on the amp side'},
     midS:{kind:'get',piece:'note',area:[16,25,27,29],at:()=>[21.5,27],name:'Pick up · Center line (source side)',short:'MID S',desc:'Race to the center line for a NOTE on the source side'},
     source:{kind:'get',piece:'note',at:()=>[24.6,2.6],name:'Load · Source',short:'SOURCE',desc:'Have the human player feed a NOTE (a long drive)'},
+    feed:{kind:'special',needsHeld:true,name:'Feed · Lob to our corner',short:'FEED',desc:'Lob the NOTE you hold into the corner by our SPEAKER (no points, but partners can grab it fast in TELEOP and the other alliance can’t)',
+      time:st=>(st.can.note.spin||.5)+1/(st.can.note.rate||1)+.6,pts:()=>0,note:'NOTE fed to our corner',
+      run:(m,r)=>{if(!r.held)return false;
+        if(!(r.task&&r.task.type==='score'&&r.task.target.kind==='feed')){m.release(r);r.task={type:'score',target:feedTarget(m,r),auto:true}}
+        const sp=r.task.target.spot;m.setGoal(r,{type:'score',x:sp.x,y:sp.y});return true}},
   },
   autoPresets:[
     {id:'c-amp',name:'Amp Side Shot',start:'L',steps:['shoot','leave'],preset:true,tier:'Standard',strat:'amp'},
@@ -34706,6 +34722,8 @@ defineSeason(Y,{
       req:st=>st.can.note.floor?null:'Needs a floor intake'},
     {id:'c-amp3',name:'Amp Side Three',start:'L',steps:['shoot','spikeL','shoot','midA','shoot'],preset:true,tier:'Advanced',strat:'amp',
       req:st=>!st.can.note.floor?'Needs a floor intake':st.can.note.range<10?'Needs a Pivot or Full-Court shooter':null},
+    {id:'c-feed',name:'Center Line Feeder',start:'R',steps:['shoot','midS','feed','midS','feed'],preset:true,tier:'Advanced',strat:'center',
+      req:st=>st.can.note.floor?null:'Needs a floor intake'},
     {id:'c-raid',name:'Center Line Raid',start:'R',steps:['shoot','midS','shoot','midS','shoot'],preset:true,tier:'Advanced',strat:'center',
       req:st=>!st.can.note.floor?'Needs a floor intake':st.can.note.range<18?'Needs a Full-Court shooter':null},
     {id:'c-ampsc',name:'Amp Score',start:'L',steps:['amp','spikeL','shoot'],preset:true,tier:'Advanced',strat:'amp',
@@ -35280,7 +35298,7 @@ function drawField(ctx,m,S,AC,player){
   for(const r of m.robots){
     drawBot(ctx,r.tm.build,r.x*S,r.y*S,r.a,S,AC[r.A],{st:r.st,held:r.held,turretA:r.turretA,hl:r.isPlayer,hang:r.climbHang||r.climbLv>0,wheelA:Math.atan2((r.path[0]||r).y-r.y,(r.path[0]||r).x-r.x)-r.a});
     if(r.od>0){ctx.strokeStyle='rgba(245,197,24,.8)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(r.x*S,r.y*S,S*2.3+Math.sin(performance.now()/90)*2,0,7);ctx.stroke()}
-    if(r.feed>0){ctx.strokeStyle='rgba(91,227,160,.85)';ctx.lineWidth=2;ctx.setLineDash([4,3]);ctx.beginPath();ctx.arc(r.x*S,r.y*S,S*2.3,0,7);ctx.stroke();ctx.setLineDash([])}
+    if(r.feed>0||r.autoFeed&&r.mode==='feed'){ctx.strokeStyle='rgba(91,227,160,.85)';ctx.lineWidth=2;ctx.setLineDash([4,3]);ctx.beginPath();ctx.arc(r.x*S,r.y*S,S*2.3,0,7);ctx.stroke();ctx.setLineDash([])}
     if(r.manual){const mv=r.manual,pulse=1+.15*Math.sin(performance.now()/120);
       ctx.strokeStyle='rgba(245,197,24,.55)';ctx.lineWidth=1.5;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(r.x*S,r.y*S);ctx.lineTo(mv.x*S,mv.y*S);ctx.stroke();ctx.setLineDash([]);
       ctx.strokeStyle='#F5C518';ctx.lineWidth=2;ctx.beginPath();ctx.arc(mv.x*S,mv.y*S,S*1.1*pulse,0,7);ctx.stroke();
@@ -35732,9 +35750,9 @@ function screenMenu(){
     ${teams.length?`<h3 class="sect">Your teams</h3><div class="col" style="gap:10px">${teams.map(card).join('')}</div>`:'<p class="muted" style="text-align:center">Build your first robot to get started.</p>'}
     <p class="muted" style="font-size:12px;text-align:center;margin:8px 0 0">Unofficial fan game inspired by the FIRST® Robotics Competition. Team data: Statbotics snapshots for every season.</p>
     <button class="btn-ghost" id="usage" style="align-self:center;font-size:12px;min-height:36px;text-transform:none;letter-spacing:0">Anonymous usage stats · ${TELE.on?'On':'Off'}</button>
-    <p class="muted" style="font-size:11px;text-align:center;margin:0">v${APP_VERSION}</p>
+    <button class="btn-ghost" id="ver" style="align-self:center;font-size:11px;min-height:32px;text-transform:none;letter-spacing:0;color:var(--muted)">v${APP_VERSION} · What’s new</button>
   </div>`);
-  wireSound(); wireInstallCard(); wireBell(); wirePushCard(); $('#usage').onclick=()=>usageSheet(screenMenu);
+  wireSound(); wireInstallCard(); wireBell(); wirePushCard(); $('#usage').onclick=()=>usageSheet(screenMenu); $('#ver').onclick=()=>whatsNewSheet(null)||toast('No release notes yet');
   if($('#cont'))$('#cont').onclick=()=>{openProfile(cur.id);screenPit()};
   $('#new').onclick=()=>{SETUP_PREFILL=null;newProfile();screenSetup()};
   $('#lbm').onclick=()=>screenLeaderboard(screenMenu);
@@ -36204,7 +36222,7 @@ function screenPractice(prev){
    A random install ID (no name, email or device info) plus small events: app opened, robot created, match played,
    replay / video / share / guide used. Batched, sent to the BOTS Admin database, never shown to other players.
    Players can turn it off from the main menu; the queue is dropped when they do. */
-const APP_VERSION='4.21';
+const APP_VERSION='4.22';
 const TELE_KEY='bots_usage_v1';
 const uuid4=()=>{if(window.crypto&&crypto.randomUUID)return crypto.randomUUID();const b=new Uint8Array(16);crypto.getRandomValues(b);b[6]=b[6]&15|64;b[8]=b[8]&63|128;
   const h=[...b].map(x=>x.toString(16).padStart(2,'0')).join('');return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`};
@@ -36396,6 +36414,7 @@ const VAPID_PUBLIC='BJ75KEhOChyx2UgwrwSQ2seYJOkVv4pkaaGefFU8pe-zqX_LeLh5fEron2g6
 let SCFG=(()=>{let s=null;try{s=JSON.parse(localStorage.getItem(SCFG_KEY))}catch(e){}s=s||{};
   s.ga=Array.isArray(s.ga)&&s.ga.length?s.ga:DEFAULT_GA.slice(); s.mine=Array.isArray(s.mine)?s.mine:[]; s.ann=Array.isArray(s.ann)?s.ann:[];
   s.seen=Array.isArray(s.seen)?s.seen:null; s.read=Array.isArray(s.read)?s.read:[]; return s})();
+const SCFG_EXISTED=(()=>{try{return localStorage.getItem(SCFG_KEY)!==null}catch(e){return false}})();   // was BOTS used on this device before this version?
 const scfgSave=()=>{try{localStorage.setItem(SCFG_KEY,JSON.stringify(SCFG))}catch(e){}};
 const seasonOpen=y=>SCFG.ga.includes(+y)||SCFG.mine.includes(+y);
 const openSeasons=()=>seasonOrder().filter(seasonOpen);
@@ -36461,8 +36480,9 @@ function inboxSheet(){
   SCFG.read=[...new Set(SCFG.read.concat(SCFG.ann.map(a=>a.id)))]; scfgSave(); updateBell();
   const el=sheet(`<h2>Announcements</h2>${pushOfferHTML(true)}
     <div class="col" style="gap:10px;margin-top:10px">${SCFG.ann.length?SCFG.ann.map(annHTML).join(''):'<p class="muted">No announcements yet. New seasons and news will show up here.</p>'}</div>
-    <button class="btn-ghost" id="inok" style="width:100%;margin-top:12px">Close</button>`);
-  el.querySelector('#inok').onclick=()=>el.remove(); wireBuild(el); wirePushOffer(el);
+    <button class="btn-ghost" id="inwn" style="width:100%;margin-top:12px">What’s new in v${APP_VERSION}</button>
+    <button class="btn-ghost" id="inok" style="width:100%;margin-top:8px">Close</button>`);
+  el.querySelector('#inok').onclick=()=>el.remove(); el.querySelector('#inwn').onclick=()=>{el.remove();whatsNewSheet(null)}; wireBuild(el); wirePushOffer(el);
 }
 
 /* ---- web push (installed web app only) ---- */
@@ -36502,6 +36522,53 @@ function wirePushCard(){const c=document.getElementById('pushcard');if(!c)return
   document.getElementById('pushno').onclick=()=>{SCFG.pushAsked=Date.now();scfgSave();c.remove()};
   c.querySelector('[data-push]').addEventListener('click',()=>{SCFG.pushAsked=Date.now();scfgSave()})}
 if('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&e.data.type==='bots-news')refreshConfig()});   // tapped a notification while BOTS was open
+
+/* ---------- what's new: shown once after BOTS updates ----------
+   Notes ship with the app. App-wide notes show for everyone; season notes only for seasons this player can play. */
+const WHATS_NEW=[
+  {v:'4.22',app:['After an update, BOTS now shows what changed. Tap the version number on the main menu to see it again.'],
+    seasons:{
+      2026:['New FEED step for custom autos: work your half of the neutral zone and pass FUEL back into your zone, ready for TELEOP. It repeats until AUTO ends.',
+            'New preset auto: Neutral Feeder (shoot the preload, then feed).',
+            'Fixed: a robot bumped off its shooting spot in AUTO now drives back and shoots instead of sitting with its preload.'],
+      2024:['New FEED step for custom autos: lob the NOTE you hold into the corner by your SPEAKER, where partners can grab it fast in TELEOP.',
+            'New preset auto: Center Line Feeder (needs a floor intake).']}},
+  {v:'4.21',app:['The notification dot on the app icon now clears once you’ve read your announcements.']},
+];
+const VER_KEY='bots_ver_seen';
+const verCmp=(a,b)=>{const x=String(a).split('.').map(Number),y=String(b).split('.').map(Number);for(let i=0;i<Math.max(x.length,y.length);i++){const d=(x[i]||0)-(y[i]||0);if(d)return d}return 0};
+function newsFor(rel){   // just the parts this player can use
+  const ss=Object.entries(rel.seasons||{}).filter(([y,l])=>seasonOpen(+y)&&SEASONS[y]&&l.length).sort((a,b)=>b[0]-a[0]);
+  return {v:rel.v,app:rel.app||[],seasons:ss};
+}
+function newsHTML(rel){
+  const n=newsFor(rel), li=t=>`<li>${esc(t)}</li>`;
+  return `${n.app.length?`<ul class="wn">${n.app.map(li).join('')}</ul>`:''}
+    ${n.seasons.map(([y,l])=>`<div class="wns"><span class="tag fuel" style="font-size:11px">${y} · ${esc(SEASONS[y].name)}</span><ul class="wn">${l.map(li).join('')}</ul></div>`).join('')}`;
+}
+const hasNews=rel=>{const n=newsFor(rel);return n.app.length+n.seasons.length>0};
+function whatsNewSheet(since){   // since = last version seen (only newer notes), or null for the full list
+  const rels=WHATS_NEW.filter(r=>since==null||verCmp(r.v,since)>0).filter(hasNews);
+  if(!rels.length) return null;
+  const el=sheet(`<div class="row" style="gap:10px;align-items:center"><span class="annic">${ICON_MEGA}</span><h2 style="margin:0">${since==null?'What’s new':'BOTS was updated'}</h2></div>
+    ${since!=null?`<p class="muted" style="margin:6px 0 0">You’re on v${APP_VERSION}. Here’s what changed${rels.length>1?' since v'+esc(since):''}:</p>`:''}
+    <div class="col" style="gap:12px;margin-top:10px">${rels.map((r,i)=>`<div class="ann"><b class="disp">v${esc(r.v)}${r.v===APP_VERSION?' · this version':''}</b>${newsHTML(r)}</div>`).join('')}</div>
+    <button class="btn-primary" id="wnok" style="width:100%;margin-top:12px">Got it</button>`);
+  el.querySelector('#wnok').onclick=()=>el.remove();
+  return el;
+}
+let wnTries=0;
+function maybeWhatsNew(){
+  let seen=null; try{seen=localStorage.getItem(VER_KEY)}catch(e){}
+  if(seen===APP_VERSION) return;
+  const existing=seen||(SCFG_EXISTED||(PROFILES&&PROFILES.list&&PROFILES.list.length)?'4.21':null);   // 4.21 didn't record the version yet
+  if(!existing||verCmp(APP_VERSION,existing)<=0){try{localStorage.setItem(VER_KEY,APP_VERSION)}catch(e){}return}   // fresh install: nothing to announce
+  // wait for the main menu with nothing else open (never during a match or over an announcement)
+  if(!document.getElementById('new')||document.querySelector('.sheet-bg')||document.querySelector('.mhud')){if(++wnTries<90)setTimeout(maybeWhatsNew,2000);return}
+  try{localStorage.setItem(VER_KEY,APP_VERSION)}catch(e){}
+  whatsNewSheet(existing);
+}
+setTimeout(maybeWhatsNew,1500);
 /* ---------- leaderboards (Supabase) ----------
    Joining picks a nickname; the device keeps a random secret that proves it owns that nickname.
    Every robot's season record is pushed after each match. Boards: All Seasons, Season, District, Regional,
