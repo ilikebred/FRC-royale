@@ -30602,6 +30602,7 @@ class Match{
     this.fuel=[]; this.air=[]; this.hubq=[]; this.fx=[];
     this.sc={B:this.blank(),T:this.blank()};
     this.firstInactive=null; this.over=false; this.finalized=false;
+    this.dblTeam={B:Math.random()<.12,T:Math.random()<.12};   // rarely, an alliance commits two robots to defending one
     this.outpost={B:24,T:24}; this.hpCd={B:3,T:4}; this.hpBurst={B:0,T:0};
     this.robots=teams.map((tm,k)=>this.mkRobot(tm,k));
     // stage fuel
@@ -30622,12 +30623,14 @@ class Match{
   }
   blank(){return {fuel:0,autoFuel:0,autoTower:0,tower:0,foul:0,hp:0}}
   mkRobot(tm,k){
-    const st=buildStats(tm.build), A=tm.A, idx=this.robotsInA?0:0;
+    let st=buildStats(tm.build); const A=tm.A, idx=this.robotsInA?0:0;
+    if(tm.edge&&tm.edge!==1){const e=tm.edge, h=1+(e-1)/2;   // difficulty: opponents drive a little sharper at higher levels (saved with the match, so replays stay exact)
+      st={...st,shotRate:st.shotRate*e,intake:st.intake*e,speed:st.speed*h,acc:Math.min(.98,st.acc*h),climbRel:Math.min(.99,(st.climbRel||0)*h)}}
     const slot=tm.slot; const sp=[[4.5,44.6],[13.5,46.2],[22.5,44.6]][slot];
     const p=M(A,sp[0],sp[1]);
     return {id:k,tm,A,st,x:p.x,y:p.y,a:A==='B'?-Math.PI/2:Math.PI/2,ta:0,held:0,goal:null,path:[],think:rnd(0,.3),
       intakeAcc:0,shotAcc:0,scored:0,missed:0,climbLv:0,autoLv:0,lock:0,lockKind:null,slow:0,od:0,def:0,feed:0,dash:false,defT:null,
-      towerSpot:M(A,...TOWER_SPOTS[slot]),stuck:0,lastX:p.x,lastY:p.y,mode:'collect',spot:null,turretA:0,isPlayer:!!tm.isPlayer,fouls:0,autoPlan:tm.autoPlan||null,autoIdx:0,fed:0,aiDef:!tm.isPlayer&&st.push>7.5&&Math.random()<.5};
+      towerSpot:M(A,...TOWER_SPOTS[slot]),stuck:0,lastX:p.x,lastY:p.y,mode:'collect',spot:null,turretA:0,isPlayer:!!tm.isPlayer,fouls:0,press:0,pinT:0,defCool:0,autoPlan:tm.autoPlan||null,autoIdx:0,fed:0,aiDef:!tm.isPlayer&&st.push>7.5&&Math.random()<.5};
   }
   addFuel(x,y,vx=0,vy=0){this.fuel.push({x,y,vx,vy})}
   /* ---------- rules ---------- */
@@ -30670,6 +30673,11 @@ class Match{
   travel(r,to){const crosses=Math.abs(this.side(r.y)-this.side(to.y));return (Math.abs(r.x-to.x)+Math.abs(r.y-to.y))*.85/r.st.speed+crosses*1.2}
   /* ---------- AI ---------- */
   shootSpot(r){
+    if(!r.isPlayer){const me=this.robots.find(o=>o.isPlayer&&o.A===r.A&&!o.climbLv);
+      if(me){let sp=null;for(let k=0;k<8;k++){sp=this.shootSpot0(r);const g=me.goal||me;if(Math.hypot(sp.x-me.x,sp.y-me.y)>4&&Math.hypot(sp.x-g.x,sp.y-g.y)>3.5)return sp}return sp}}
+    return this.shootSpot0(r);
+  }
+  shootSpot0(r){
     const A=r.A, m=r.st.mode;
     if(m==='close') return M(A,13.5+rnd(-1.7,1.7),43.5);
     if(m==='hood'){const a=rnd(-1.1,1.1),R=rnd(4.6,7.5);return M(A,clamp(13.5+Math.sin(a)*R,3,24),Math.max(43.6,41+Math.cos(a)*R))}
@@ -30680,15 +30688,28 @@ class Match{
   pickFuel(r,filter){
     let best=null,bs=1e9; const opp=r.A==='B'?BAR.T:BAR.B, autoHalf=this.t<this.R.auto;
     const claims=this.robots.filter(o=>o!==r&&o.goal&&o.goal.type==='collect').map(o=>o.goal);
+    const mates=this.robots.filter(o=>o!==r&&o.A===r.A&&!o.climbLv);                 // stay out of partners' way, the player's most of all
+    const walls=this.robots.filter(o=>o!==r&&(o.climbLv>0||o.lock>0||o.climbHang));   // climbers don't move: FUEL tucked behind them is unreachable
     for(let i=0;i<this.fuel.length;i+=1){
-      const f=this.fuel[i]; if(filter&&!filter(f)) continue; if(autoHalf&&(r.A==='B'?f.y<CENTER+.4:f.y>CENTER-.4)) continue; let s=Math.hypot(f.x-r.x,f.y-r.y);
+      const f=this.fuel[i]; if(filter&&!filter(f)) continue; if(f.skipT>this.t) continue;
+      if(autoHalf&&(r.A==='B'?f.y<CENTER+.4:f.y>CENTER-.4)) continue; let s=Math.hypot(f.x-r.x,f.y-r.y);
       const oppSide=r.A==='B'?f.y<opp:f.y>opp; if(oppSide) s+=60;
       if(this.inZone(f,r.A)) s-=3;
       if(this.side(f.y)!==this.side(r.y)) s+=r.st.low?2:2+(1/r.st.bump-1)*4;
       for(const c of claims){if(Math.abs(c.x-f.x)+Math.abs(c.y-f.y)<3)s+=7}
-      if(s<bs){bs=s;best=f}
+      if(!r.isPlayer) for(const o of mates){const d=Math.abs(o.x-f.x)+Math.abs(o.y-f.y); if(d<4.2) s+=o.isPlayer?14:5}
+      if(s>=bs) continue;
+      if(walls.some(o=>Math.abs(o.x-f.x)<ROB_R*1.7&&Math.abs(o.y-f.y)<ROB_R*1.7)) continue;
+      if(!this.reachable(r,f)) continue;
+      bs=s;best=f;
     }
     return best?{x:best.x,y:best.y}:null;
+  }
+  reachable(r,f){   // can the robot get its intake to this ball? (not wedged in/behind the TOWER, a HUB or a wall)
+    if(!this.blocked(r,f.x,f.y)) return true;
+    const rr=ROB_R+.25+r.st.reach*.8;
+    for(let k=0;k<12;k++){const a=k/12*6.283; if(!this.blocked(r,f.x+Math.cos(a)*rr,f.y+Math.sin(a)*rr)) return true}
+    return false;
   }
   setGoal(r,g){
     const changed=!r.goal||r.goal.type!==g.type||Math.abs(r.goal.x-g.x)+Math.abs(r.goal.y-g.y)>1.2;
@@ -30723,10 +30744,20 @@ class Match{
       this.setGoal(r,{type:'feed',...(f||M(A,13.5,32))}); return;
     }
     // defense
-    if(r.def>0||(r.aiDef&&!this.active(A)&&this.untilFlip(A)>6&&r.held>=r.st.cap*.6&&ph.k==='shift')){
+    if(r.defCool>0) r.defCool-=.3;
+    const aiWants=r.aiDef&&r.defCool<=0&&!this.active(A)&&this.untilFlip(A)>6&&r.held>=r.st.cap*.6&&ph.k==='shift';
+    if(r.def>0||aiWants){
       const foes=this.robots.filter(o=>o.A!==A&&o.climbLv===0&&o.lock<=0);
-      if(foes.length){
-        const tgt=foes.sort((a,b)=>(b.held+b.scored*.2)-(a.held+a.scored*.2))[0];
+      const mates=this.robots.filter(o=>o!==r&&o.A===A&&o.mode==='defend'&&o.defT);
+      const busy=new Map(); for(const o of mates) busy.set(o.defT,(busy.get(o.defT)||0)+1);
+      const cap=this.dblTeam[A]?2:1;
+      let tgt=null;
+      if(r.def>0) tgt=foes.sort((a,b)=>(b.held+b.scored*.2)-(a.held+a.scored*.2))[0];   // the player's own DEFEND boost picks freely
+      else if(mates.filter(o=>!o.isPlayer).length<cap){
+        const val=o=>(o.held+o.scored*.2)-(busy.get(o)||0)*(this.dblTeam[A]?18:1e6);  // already covered: someone else
+        tgt=foes.filter(o=>(busy.get(o)||0)<cap).sort((a,b)=>val(b)-val(a))[0]||null;
+      }
+      if(tgt){
         r.defT=tgt; r.mode='defend';
         const h=this.hub(tgt.A); const p={x:tgt.x+(h.x-tgt.x)*.25,y:tgt.y+(h.y-tgt.y)*.25};
         this.setGoal(r,{type:'defend',x:clamp(p.x,1.5,25.5),y:clamp(p.y,1.5,52.5)}); if(!r.path.length)this.planPath(r,r.goal); return;
@@ -30874,6 +30905,7 @@ class Match{
     } else {r.x=nx;r.y=ny}
     // stuck detection
     r.stuck+= (Math.abs(r.x-r.lastX)+Math.abs(r.y-r.lastY)<sp*dt*.15)?dt:-dt*2; r.stuck=Math.max(0,r.stuck); r.lastX=r.x;r.lastY=r.y;
+    if(r.stuck>1.2&&r.goal&&r.goal.type==='collect'){for(const f of this.fuel)if(Math.abs(f.x-r.goal.x)<1.2&&Math.abs(f.y-r.goal.y)<1.2)f.skipT=this.t+8;r.goal=null;r.think=0}
     if(r.stuck>1.2){r.stuck=0;r.path.unshift({x:clamp(r.x+rnd(-3,3),1.6,25.4),y:clamp(r.y+rnd(-2,2),1.6,52.4)})}
   }
   blocked(r,x,y){
@@ -30912,6 +30944,11 @@ class Match{
       if(Math.abs(f.vx)+Math.abs(f.vy)<.05){f.vx=0;f.vy=0}
       if(f.x<.3){f.x=.3;f.vx=Math.abs(f.vx)*.5} if(f.x>FW-.3){f.x=FW-.3;f.vx=-Math.abs(f.vx)*.5}
       if(f.y<.3){f.y=.3;f.vy=Math.abs(f.vy)*.5} if(f.y>FL-.3){f.y=FL-.3;f.vy=-Math.abs(f.vy)*.5}
+      for(const A of ['B','T']){ // out of the TOWER base
+        const tw=M(A,TOWER_C,52.8), dx=f.x-tw.x, dy=f.y-tw.y;
+        if(Math.abs(dx)<2.65&&Math.abs(dy)<1.25){const ex=2.75-Math.abs(dx), ey=1.35-Math.abs(dy);
+          if(ex<ey){f.x=tw.x+Math.sign(dx||1)*2.75;f.vx=Math.sign(dx||1)*Math.abs(f.vx)*.5} else {f.y=tw.y+Math.sign(dy||-1)*1.35;f.vy=Math.sign(dy||-1)*Math.abs(f.vy)*.5}}
+      }
       for(const Y of [BAR.B,BAR.T]){ // bounce off the HUB
         if(Math.abs(f.y-Y)<2.1&&f.x>HUBX[0]&&f.x<HUBX[1]){const s=f.y<Y?-1:1;f.y=Y+s*2.15;f.vy=s*Math.abs(f.vy)*.5}
       }
@@ -30919,21 +30956,36 @@ class Match{
   }
   collide(dt){
     const R=this.robots;
+    for(const r of R){r.pressN=0}
     for(let i=0;i<R.length;i++)for(let j=i+1;j<R.length;j++){
-      const a=R[i],b=R[j]; const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||.01, min=ROB_R*2;
+      const a=R[i],b=R[j]; const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||.01, same=a.A===b.A;
+      const min=ROB_R*2*(same&&(a.isPlayer||b.isPlayer)?1.12:1);   // partners keep a little room around the player
       if(d<min){
-        const o=min-d, fa=(a.climbLv||a.lock>0)?0:b.st.push/(a.st.push+b.st.push), fb=(b.climbLv||b.lock>0)?0:a.st.push/(a.st.push+b.st.push);
+        const o=min-d; let fa=(a.climbLv||a.lock>0)?0:b.st.push/(a.st.push+b.st.push), fb=(b.climbLv||b.lock>0)?0:a.st.push/(a.st.push+b.st.push);
+        if(same&&(a.isPlayer||b.isPlayer)){const pa=a.isPlayer?.12:.88; fa=(a.climbLv||a.lock>0)?0:pa; fb=(b.climbLv||b.lock>0)?0:1-pa}   // partner gives way
         const ax=a.x-dx/d*o*fa, ay=a.y-dy/d*o*fa, bx=b.x+dx/d*o*fb, by=b.y+dy/d*o*fb;
         if(!this.blocked(a,ax,ay)){a.x=ax;a.y=ay} if(!this.blocked(b,bx,by)){b.x=bx;b.y=by}
-        for(const [d1,d2] of [[a,b],[b,a]]){
-          if(d1.defT===d2&&d1.A!==d2.A){d2.slow=.6; if(Math.random()<.035*dt*30/30){d1.fouls++;this.sc[d2.A].foul+=5;this.fxText(d1.x,d1.y,'MINOR FOUL','#FF9F43')}}
-        }
+        if(same) continue;
+        for(const [d1,d2] of [[a,b],[b,a]]) if(d1.defT===d2&&d1.mode==='defend'){d2.slow=.6;d2.pressN++;d1.inContact=true}
       }
     }
+    // fouls: one defender rarely fouls; ganging up on one robot draws far more; pinning for 3 s is always a foul
+    for(const d1 of R){
+      const tgt=d1.defT;
+      if(!d1.inContact||!tgt){d1.pinT=Math.max(0,d1.pinT-dt*2);continue}
+      d1.inContact=false; if(d1.pinT===0) d1.pinSmart=!d1.isPlayer&&Math.random()<.8; d1.pinT+=dt;
+      if(d1.pinSmart&&d1.pinT>2.3){d1.pinT=0;d1.defCool=1.2;d1.defT=null;d1.mode='collect';d1.goal=null;d1.path=[];d1.think=0;continue}   // most defenders back off before a pin
+      const n=tgt.pressN, rate=.035*(n>=2?4*(n-1):1);
+      if(Math.random()<rate*dt){d1.fouls++;this.sc[tgt.A].foul+=5;this.fxText(d1.x,d1.y,n>=2?'FOUL · GANGING UP':'MINOR FOUL','#FF9F43')}
+      else if(d1.pinT>3){d1.fouls++;this.sc[tgt.A].foul+=5;this.fxText(d1.x,d1.y,'PINNING FOUL','#FF9F43');d1.pinT=0;
+        if(!d1.isPlayer){d1.defCool=4;d1.defT=null;d1.mode='collect';d1.goal=null;d1.path=[];d1.think=0}}
+    }
+    for(const r of R) r.press=r.pressN;
   }
   intake(r,dt){
     if(r.held>=r.st.cap){r.intakeAcc=0;return}
-    r.intakeAcc=Math.min(3,r.intakeAcc+r.st.intake*dt*(r.od>0?1.6:1));
+    const pressed=r.slow>0?1/(1+.9*Math.max(1,r.press)):1;   // being defended makes collecting hard
+    r.intakeAcc=Math.min(3,r.intakeAcc+r.st.intake*dt*(r.od>0?1.6:1)*pressed);
     if(r.intakeAcc<1) return;
     const reach=ROB_R+.35+r.st.reach;
     const fx=Math.cos(r.a), fy=Math.sin(r.a);
@@ -30967,11 +31019,12 @@ class Match{
     }
     if(!this.canShoot(r)){r.shotAcc=Math.min(r.shotAcc,0);r.spun=0;return}
     if((r.spun=(r.spun||0)+dt)<r.st.spin) return;
-    r.shotAcc+=r.st.shotRate*dt*(r.od>0?1.6:1)*(r.slow>0?.6:1);
+    const turret=r.st.mode==='zone', dfd=r.slow>0;   // turrets aim themselves: defence barely slows their shooting
+    r.shotAcc+=r.st.shotRate*dt*(r.od>0?1.6:1)*(dfd?(turret?.92:.6/(1+.25*Math.max(0,r.press-1))):1);
     while(r.shotAcc>=1&&r.held>0){
       r.shotAcc-=1; r.held--;
       const moving=r.path.length>0&&r.st.mode==='zone';
-      const acc=r.st.acc*(moving?.93:1)*(r.slow>0?.8:1)*(this.inZone(r)?1:.5);
+      const acc=r.st.acc*(moving?.93:1)*(r.slow>0?(turret?.96:.8):1)*(this.inZone(r)?1:.5);
       this.launch(r,r.A,acc,r);
     }
   }
@@ -31025,6 +31078,9 @@ Object.assign(Match.prototype,{
   rewardPts(me){return me.scored*2+[0,10,20,30][me.climbLv]+(me.autoLv?15:0)},
 });
 SEASONS[2026].Match=Match;
+/* difficulty: how much sharper opponents drive at each ladder level (event #1 … Einstein) */
+const OPP_EDGE=[1.00,1.03,1.06,1.08,1.10];
+function oppEdge(level){return OPP_EDGE[Math.max(0,Math.min(OPP_EDGE.length-1,level|0))]}
 SEASONS[2026].boosts=[
   {k:'od',name:'Overdrive',sub:'Faster 10s'},
   {k:'fd',name:'Feed',sub:'Pass from center'},
@@ -35963,7 +36019,7 @@ function screenMatch(){
     return {...t,A:P,slot,autoPlan:[...pa.steps],strat:pp.strat,rel:pp.rel};
   });
   if(!plan){partnerTeams[0].slot=[0,1,2].filter(x=>x!==ps)[0];partnerTeams[1].slot=[0,1,2].filter(x=>x!==ps)[1]}
-  const teams=[{...mine.find(t=>t.isPlayer),A:P,slot:ps,autoPlan:[...auto.steps],strat:plan?plan.me.strat:null},...partnerTeams].concat(opp.map((t,i)=>({...t,A:O,slot:i})));
+  const teams=[{...mine.find(t=>t.isPlayer),A:P,slot:ps,autoPlan:[...auto.steps],strat:plan?plan.me.strat:null},...partnerTeams].concat(opp.map((t,i)=>({...t,A:O,slot:i,...(SV().year===2026?{edge:oppEdge(leagueOf(SAVE.trophies))}:{})})));
   // every match is seeded and its inputs recorded, so it can be replayed exactly from Past Matches
   const SS=SV(), BOOSTS=SS.boosts, run=new SimRun(SS.year,teams,(Math.random()*2**31)|0,{trophies:SAVE.trophies}), m=run.m, me=run.me;
   const ready={}; BOOSTS.forEach(b=>ready[b.k]=0); // match time when each boost is ready again
@@ -36288,7 +36344,7 @@ function screenPractice(prev){
    A random install ID (no name, email or device info) plus small events: app opened, robot created, match played,
    replay / video / share / guide used. Batched, sent to the BOTS Admin database, never shown to other players.
    Players can turn it off from the main menu; the queue is dropped when they do. */
-const APP_VERSION='4.24';
+const APP_VERSION='4.26';
 const TELE_KEY='bots_usage_v1';
 const uuid4=()=>{if(window.crypto&&crypto.randomUUID)return crypto.randomUUID();const b=new Uint8Array(16);crypto.getRandomValues(b);b[6]=b[6]&15|64;b[8]=b[8]&63|128;
   const h=[...b].map(x=>x.toString(16).padStart(2,'0')).join('');return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`};
@@ -36604,6 +36660,11 @@ if('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('messa
 /* ---------- what's new: shown once after BOTS updates ----------
    Notes ship with the app. App-wide notes show for everyone; season notes only for seasons this player can play. */
 const WHATS_NEW=[
+  {v:'4.26',seasons:{2026:['Opponents get a little tougher as you climb the ladder, especially at the District Championship, World Championship and Einstein. Your first event is unchanged.']}},
+  {v:'4.25',seasons:{2026:['Your alliance partners now give you room: they pick FUEL and shooting spots away from you and get out of your way instead of shoving you around.',
+    'Opponents spread their defense out. Two robots rarely gang up on one, and when they do they draw fouls fast. Pinning a robot for 3 seconds is a foul.',
+    'Turret shooters keep scoring under defense, but every robot collects slowly while it’s being defended.',
+    'Fixed: robots no longer get stuck trying to grab FUEL wedged in the TOWER or behind a climbing robot.']}},
   {v:'4.24',app:['Custom robot colors now open a color wheel. Your color stays in the list next to the others; tap it again to fine-tune.']},
   {v:'4.23',app:['Robots can be pink now, or any color you like: tap the rainbow swatch when building or editing a robot to open a color picker.',
     'Anonymous usage stats now also count which country and state or region BOTS is played in. Only the place is counted, never your address.']},
