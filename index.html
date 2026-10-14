@@ -201,6 +201,17 @@ h3.sect{font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--
 .seasonchip.cur{border-color:var(--fuel)}
 .seasonchip.add{border-style:dashed;justify-content:center}
 .seasonchip.add .sn{color:var(--muted)}
+.seasonchip.add.new{border-color:var(--fuel);background:rgba(245,197,24,.06)}.seasonchip.add.new .sn{color:var(--fuel)}
+.newtag{display:inline-block;font:700 9px var(--disp);letter-spacing:.08em;color:#111;background:var(--fuel);border-radius:4px;padding:1px 5px}
+.seasoncards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.seasoncard{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:12px 14px;min-height:0;border:1px solid var(--line);border-radius:14px;background:var(--panel);text-transform:none;letter-spacing:0}
+.seasoncard .sy{font:700 22px var(--disp);color:var(--text)}
+.seasoncard .sn{font:700 13px var(--disp);color:var(--fuel);text-transform:uppercase;letter-spacing:.04em}
+.seasoncard .ss{font:500 12px var(--body);color:var(--muted);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.seasoncard .sgo{margin-top:6px;font:700 13px var(--disp);color:var(--text);letter-spacing:.04em}
+.seasoncard.fresh{border-color:var(--fuel);background:linear-gradient(160deg,rgba(245,197,24,.12),var(--panel) 60%)}.seasoncard.fresh .sgo{color:var(--fuel)}
+.seasoncard.soonc{border-style:dashed;background:transparent;opacity:.7}.seasoncard.soonc .ss{white-space:normal}.seasoncard.soonc .sn{color:var(--muted)}
+.newseason{border-color:var(--fuel);background:linear-gradient(160deg,rgba(245,197,24,.14),var(--panel) 70%)}
 .topbar .ib{flex:none}
 .hubline .snd{min-height:0;width:40px;min-width:40px;padding:0;border-radius:8px}
 .brandbar{display:flex;flex-direction:column;align-items:center;gap:4px;padding:18px 16px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
@@ -35840,6 +35851,8 @@ const soundBtn=()=>`<button class="btn-ghost ib snd" aria-label="${Music.on?'Tur
 function wireSound(){app.querySelectorAll('.snd').forEach(b=>b.onclick=()=>{Music.unlock();const on=Music.toggle();b.innerHTML=on?ICONS.sound:ICONS.mute;b.setAttribute('aria-label',on?'Turn music off':'Turn music on')})}
 
 /* ---------- main menu ---------- */
+const earlyAccess=y=>SCFG.mine.includes(+y)&&!SCFG.ga.includes(+y);
+function markSeen(y){SCFG.newSeen=[...new Set([...(SCFG.newSeen||[]),+y])];scfgSave()}
 function screenMenu(){
   Music.play('menu');
   let cur=PROFILES.list.find(p=>p.id===PROFILES.current&&p.team&&seasonOpen(p.season));   // Continue only into a season that's open
@@ -35854,21 +35867,38 @@ function screenMenu(){
     return `<button class="seasonchip${cur&&cur.id===p.id?' cur':''}" data-resume="${p.id}" aria-label="Play ${p.season} ${SEASONS[p.season].name}">
       <span class="sy">${p.season}</span><span class="sn">${SEASONS[p.season].name.replace("FIRST ","")}</span>
       <span class="ss">${esc(lg.name.replace(' District Event',' Dist.').replace('Championship','Champs'))}</span><span class="ss">${(p.banners||[]).length?`<i class="bbdot"></i>×${p.banners.length} · `:''}${p.trophies} RP</span><span class="ss">${p.rec.w}-${p.rec.l}-${p.rec.t} · ${powerOf(buildStats(buildOf(p),p.season),p.season)} PWR</span></button>`};
-  const card=g=>{const L=g.latest, missing=openSeasons().filter(y=>!g.list.some(p=>p.season===y)).length;
+  const card=g=>{const L=g.latest, missing=openSeasons().filter(y=>!g.list.some(p=>p.season===y));
     return `<div class="teamcard"><div class="row" style="gap:10px;align-items:center"><div class="rcswatch" style="background:${L.color}"></div>
       <div class="grow" style="min-width:0"><div class="row" style="gap:8px"><span class="teamno" style="font-size:22px">${g.num}</span><span class="nm">${esc(L.team.name)}</span></div>
       <div class="muted" style="font-size:12px">${g.list.length} season${g.list.length>1?'s':''}${g.updated?' · last played '+new Date(g.updated).toLocaleDateString(undefined,{month:'short',day:'numeric'}):''}</div></div>
       <button class="ib btn-ghost" data-manage="${g.num}" aria-label="Manage team ${g.num}">${ICONS.trash}</button></div>
-      <div class="chips2">${g.list.map(chip).join('')}${missing?`<button class="seasonchip add" data-addseason="${g.num}"><span class="sy">+</span><span class="sn">Add season</span><span class="ss">${missing} more</span></button>`:''}</div></div>`};
+      <div class="chips2">${g.list.map(chip).join('')}${missing.map(y=>`<button class="seasonchip add new" data-addseason="${g.num}" data-y="${y}" aria-label="Build a ${y} ${esc(SEASONS[y].name)} robot for team ${g.num}"><span class="sy">${y}</span><span class="sn">${esc(SEASONS[y].name.replace("FIRST ",""))}</span><span class="ss"><b class="newtag">${earlyAccess(y)?'EARLY ACCESS':'NEW'}</b></span><span class="ss">+ Build robot</span></button>`).join('')}</div></div>`};
+  // every season this player can play, front and centre: resume the robot, or start one (for your latest team)
+  const latestTeam=teams[0]||null, robotsIn=y=>PROFILES.list.filter(p=>p.team&&p.season===y).sort((a,b)=>(b.updated||0)-(a.updated||0));
+  const fresh=openSeasons().filter(y=>!robotsIn(y).length), unseen=teams.length?fresh.filter(y=>!(SCFG.newSeen||[]).includes(y)):[];   // only nudge players who already have a robot
+  const seasonCard=y=>{const R=robotsIn(y), p=R[0], lg=p?leagues(p)[leagueOf(p.trophies,p)]:null;
+    return `<button class="seasoncard${R.length?'':' fresh'}" data-season="${y}" aria-label="${R.length?'Play':'Start'} ${y} ${esc(SEASONS[y].name)}">
+      <span class="row" style="gap:6px;align-items:center;width:100%"><span class="sy">${y}</span>${earlyAccess(y)?'<b class="newtag">EARLY ACCESS</b>':!R.length?'<b class="newtag">NEW</b>':''}</span>
+      <span class="sn">${esc(SEASONS[y].name)}</span>
+      <span class="ss">${p?`${p.team.num} · ${esc(lg.name.replace(' District Event',' Dist.').replace('Championship','Champs'))}`:latestTeam?`Build team ${latestTeam.num}’s robot`:'Build your robot'}</span>
+      <span class="sgo">${R.length?'Play ›':'+ Start ›'}</span></button>`};
+  const seasonsHTML=`<h3 class="sect">Seasons</h3><div class="seasoncards">${openSeasons().map(seasonCard).join('')}${openSeasons().length<seasonOrder().length?`<div class="seasoncard soonc"><span class="sy">+${seasonOrder().length-openSeasons().length}</span><span class="sn">More seasons</span><span class="ss">Coming soon — watch for announcements</span></div>`:''}</div>`;
+  const newBanner=unseen.length?`<div class="card newseason" id="newseason"><div class="row" style="gap:12px;align-items:flex-start"><span class="annic">${ICON_MEGA}</span><div class="grow">
+      <b class="disp" style="font-size:18px">${unseen.length>1?unseen.length+' new seasons are open':`${unseen[0]} ${esc(SEASONS[unseen[0]].name)} is open${earlyAccess(unseen[0])?' — early access, just for you':''}!`}</b>
+      <div class="muted" style="font-size:13px;margin-top:2px">${unseen.length>1?unseen.map(y=>y+' '+esc(SEASONS[y].name)).join(' · '):'Build a robot and play it now.'}</div>
+      <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">${unseen.map(y=>`<button class="btn-primary" data-season="${y}" style="min-height:42px">Build a ${y} robot</button>`).join('')}</div></div>
+      <button class="btn-ghost ib" id="nsx" aria-label="Hide this">${ICONS.x}</button></div></div>`:'';
   show(`<div class="row" style="justify-content:flex-end;gap:8px;padding:12px 16px 0">${bellBtn()}${soundBtn()}</div>
   <div class="title-hero" style="padding-top:8px"><div class="tag fuel" style="display:inline-block;margin-bottom:12px">FRC-inspired robot battler</div>
     <h1 class="logo">BOTS</h1><div class="acr"><b>B</b>uild · <b>O</b>ptimize · <b>T</b>eam · <b>S</b>core</div><p class="muted" style="margin:10px 0 0">${openSeasons().length>1?openSeasons().length+' FRC seasons':'FRC '+openSeasons()[0]+' · '+SEASONS[openSeasons()[0]].name}${openSeasons().length<seasonOrder().length?' · more coming soon':''}</p></div>
   <div class="pad col">
     <div id="instslot">${installCardHTML()}</div>
     ${pushPromptCardHTML()}
+    ${newBanner}
     ${cur?`<button class="btn-primary btn-big" id="cont">Continue · ${cur.team.num} · ${cur.season}</button>`:''}
     <button class="${cur?'':'btn-primary '}btn-big" id="new">New robot</button>
     <button class="btn-ghost btn-big" id="lbm">${ICONS.trophy} Leaderboards${lbJoined()?' · '+esc(LBS.nickname):''}</button>
+    ${seasonsHTML}
     ${teams.length?`<h3 class="sect">Your teams</h3><div class="col" style="gap:10px">${teams.map(card).join('')}</div>`:'<p class="muted" style="text-align:center">Build your first robot to get started.</p>'}
     <p class="muted" style="font-size:12px;text-align:center;margin:8px 0 0">Unofficial fan game inspired by the FIRST® Robotics Competition. Team data: Statbotics snapshots for every season.</p>
     <button class="btn-ghost" id="usage" style="align-self:center;font-size:12px;min-height:36px;text-transform:none;letter-spacing:0">Anonymous usage stats · ${TELE.on?'On':'Off'}</button>
@@ -35879,8 +35909,14 @@ function screenMenu(){
   $('#new').onclick=()=>{SETUP_PREFILL=null;newProfile();screenSetup()};
   $('#lbm').onclick=()=>screenLeaderboard(screenMenu);
   app.querySelectorAll('[data-resume]').forEach(b=>b.onclick=()=>{openProfile(b.dataset.resume);screenPit()});
-  app.querySelectorAll('[data-addseason]').forEach(b=>b.onclick=()=>{const g=groups.get(+b.dataset.addseason), L=g.latest;
-    SETUP_PREFILL={num:g.num,name:L.team.name,color:L.color,have:g.list.map(p=>p.season)};newProfile(openSeasons().find(y=>!SETUP_PREFILL.have.includes(y)));screenSetup()});
+  const startSeason=(y,g)=>{markSeen(y);
+    if(g){const L=g.latest;SETUP_PREFILL={num:g.num,name:L.team.name,color:L.color,have:g.list.map(p=>p.season)}} else SETUP_PREFILL=null;
+    newProfile(y);screenSetup()};
+  app.querySelectorAll('[data-addseason]').forEach(b=>b.onclick=()=>startSeason(+b.dataset.y,groups.get(+b.dataset.addseason)));
+  app.querySelectorAll('[data-season]').forEach(b=>b.onclick=()=>{const y=+b.dataset.season, R=robotsIn(y);
+    if(R.length){markSeen(y);openProfile(R[0].id);return screenPit()}
+    startSeason(y,latestTeam)});
+  if($('#nsx'))$('#nsx').onclick=()=>{unseen.forEach(markSeen);screenMenu()};
   app.querySelectorAll('[data-manage]').forEach(b=>b.onclick=()=>{const g=groups.get(+b.dataset.manage);
     const el=sheet(`<h2>Team ${g.num}</h2><p class="muted">Delete one season's robot (its parts, credits, autos, record and replays), or the whole team. This can't be undone.</p>
       <div class="col" style="gap:8px;margin-top:10px">${g.list.map(p=>`<div class="row" style="gap:8px"><span class="grow"><b>${p.season} ${SEASONS[p.season].name}</b><br><span class="muted" style="font-size:12px">${p.rec.w}-${p.rec.l}-${p.rec.t} · ${p.credits} credits</span></span><button class="btn-ghost" data-delone="${p.id}" style="color:var(--red)">Delete</button></div>`).join('')}
@@ -36344,7 +36380,7 @@ function screenPractice(prev){
    A random install ID (no name, email or device info) plus small events: app opened, robot created, match played,
    replay / video / share / guide used. Batched, sent to the BOTS Admin database, never shown to other players.
    Players can turn it off from the main menu; the queue is dropped when they do. */
-const APP_VERSION='4.26';
+const APP_VERSION='4.27';
 const TELE_KEY='bots_usage_v1';
 const uuid4=()=>{if(window.crypto&&crypto.randomUUID)return crypto.randomUUID();const b=new Uint8Array(16);crypto.getRandomValues(b);b[6]=b[6]&15|64;b[8]=b[8]&63|128;
   const h=[...b].map(x=>x.toString(16).padStart(2,'0')).join('');return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`};
@@ -36660,6 +36696,7 @@ if('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('messa
 /* ---------- what's new: shown once after BOTS updates ----------
    Notes ship with the app. App-wide notes show for everyone; season notes only for seasons this player can play. */
 const WHATS_NEW=[
+  {v:'4.27',app:['Every season you can play now shows on the main menu under Seasons, with a banner when a new one opens for you, including early access. Tap it to build a robot for that season.']},
   {v:'4.26',seasons:{2026:['Opponents get a little tougher as you climb the ladder, especially at the District Championship, World Championship and Einstein. Your first event is unchanged.']}},
   {v:'4.25',seasons:{2026:['Your alliance partners now give you room: they pick FUEL and shooting spots away from you and get out of your way instead of shoving you around.',
     'Opponents spread their defense out. Two robots rarely gang up on one, and when they do they draw fouls fast. Pinning a robot for 3 seconds is a foul.',
@@ -36699,11 +36736,13 @@ function whatsNewSheet(since){   // since = last version seen (only newer notes)
   el.querySelector('#wnok').onclick=()=>el.remove();
   return el;
 }
-let wnTries=0;
+let wnTries=0, WN_FROM;
+const HAD_ROBOTS=(()=>{try{const d=JSON.parse(localStorage.getItem(PROFILES_KEY));return !!(d&&d.list&&d.list.length)}catch(e){return false}})();   // robots saved before this launch
 function maybeWhatsNew(){
   let seen=null; try{seen=localStorage.getItem(VER_KEY)}catch(e){}
   if(seen===APP_VERSION) return;
-  const existing=seen||(SCFG_EXISTED||(PROFILES&&PROFILES.list&&PROFILES.list.length)?'4.21':null);   // 4.21 didn't record the version yet
+  if(WN_FROM===undefined) WN_FROM=seen||(SCFG_EXISTED||HAD_ROBOTS?'4.21':null);   // 4.21 didn't record the version yet
+  const existing=WN_FROM;
   if(!existing||verCmp(APP_VERSION,existing)<=0){try{localStorage.setItem(VER_KEY,APP_VERSION)}catch(e){}return}   // fresh install: nothing to announce
   // wait for the main menu with nothing else open (never during a match or over an announcement)
   if(!document.getElementById('new')||document.querySelector('.sheet-bg')||document.querySelector('.mhud')){if(++wnTries<90)setTimeout(maybeWhatsNew,2000);return}
