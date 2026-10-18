@@ -1,0 +1,2 @@
+Edited using the built-in image generation tool from pit-stadium-arcade.png.
+Prompt: Edit this game stadium background. Remove ALL radial rays / sunburst / light beams from the sky and background. Replace them with a smooth soft pale blue sky with the existing soft stylized clouds. Preserve stadium stands, pit bays, perspective, floor, framing, palette and cartoon style. No spotlight, no radial pattern, no central glowing light. No UI or robot. This is a subtle background layer; separate robot spotlight will be drawn in code.

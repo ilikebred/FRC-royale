@@ -1,0 +1,7 @@
+:root[data-theme="light"]{--bg:#edf1f6;--panel:#fff;--panel2:#dfe6ef;--line:#bcc8d7;--text:#172536;--muted:#4f6075;--ok:#14764b;--fuel:#d99f00;color-scheme:light}
+:root[data-theme="dark"]{color-scheme:dark}
+#theme-toggle{position:fixed;top:8px;right:8px;z-index:1000;box-shadow:0 2px 12px #0003;font-size:12px;min-height:36px;border:1px solid var(--line)}
+@media(max-width:650px){#theme-toggle{top:auto;bottom:8px;right:8px;opacity:.92}}
+.path-editor{margin-top:14px}.path-editor p{font-size:13px;line-height:1.45}.path-editor canvas{display:block;width:min(100%,25vh);max-width:270px;height:auto;margin:12px auto;touch-action:none;border:1px solid var(--line);border-radius:8px}
+.route-help{font-size:11px;text-align:center;color:var(--muted);padding:3px}
+[data-theme="light"] .sb{color:#fff}

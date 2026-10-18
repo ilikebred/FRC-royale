@@ -1,0 +1,11 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+const saved=new Map(),elements=[],document={hidden:false,body:{append:e=>elements.push(e)},createElement:()=>({hidden:true,setAttribute(){}})};
+const sandbox={document,localStorage:{getItem:k=>saved.get(k),setItem:(k,v)=>saved.set(k,v)}};
+vm.createContext(sandbox);vm.runInContext(fs.readFileSync('performance-ui.js','utf8'),sandbox);
+vm.runInContext('PerformanceUI.tick(1000)',sandbox);assert.equal(elements.length,0,'disabled meter creates no DOM');
+vm.runInContext('PerformanceUI.set(true);for(let i=0;i<=61;i++)PerformanceUI.tick(1000+i*1000/60)',sandbox);
+assert.equal(elements[0].textContent,'60 FPS');assert.equal(elements[0].hidden,false);assert.equal(saved.get('frc-show-fps'),'on');
+document.hidden=true;vm.runInContext('PerformanceUI.tick(3000)',sandbox);assert.equal(elements[0].hidden,true);
+document.hidden=false;vm.runInContext('PerformanceUI.tick(4000)',sandbox);assert.equal(elements[0].textContent,'FPS · measuring');
+vm.runInContext('PerformanceUI.set(false)',sandbox);assert.equal(elements[0].hidden,true);assert.equal(saved.get('frc-show-fps'),'off');
+console.log('PASS: measured FPS, persisted toggle, disabled overhead, and hidden-tab reset');

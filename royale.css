@@ -1,0 +1,33 @@
+/* FRC Royale — original arena identity inspired by collectible battle games. */
+:root,:root[data-theme="dark"]{--bg:#0b1b35;--panel:#18365b;--panel2:#244a76;--line:#3a6593;--text:#f0f6ff;--muted:#aac1df;--fuel:#ffd15a;--blue:#48acff;--ok:#4fe0b0;--disp:'Chakra Petch',system-ui,sans-serif;color-scheme:dark}
+:root[data-theme="light"]{--bg:#dceaf6;--panel:#f8fcff;--panel2:#d1e4f4;--line:#9bbad5;--text:#173454;--muted:#4f6c89;--fuel:#a86b09;--blue:#176eb3;--ok:#187654;color-scheme:light}
+body{background-color:var(--bg);background-image:linear-gradient(45deg,#4d8fe00a 25%,transparent 25%,transparent 75%,#4d8fe00a 75%),linear-gradient(45deg,#4d8fe00a 25%,transparent 25%,transparent 75%,#4d8fe00a 75%);background-size:64px 64px;background-position:0 0,32px 32px}
+#app{background:var(--bg);box-shadow:0 0 100px #0004;border-inline:1px solid var(--line)}
+button{border:1px solid var(--line);border-bottom-width:3px;background:linear-gradient(180deg,var(--panel2),var(--panel));box-shadow:inset 0 1px 0 #ffffff18,0 2px 0 #07162b55;transition:filter .12s,transform .12s}
+button:hover:not(:disabled){filter:brightness(1.12)}button:active:not(:disabled){transform:translateY(2px);box-shadow:inset 0 1px 0 #fff1}
+button:focus-visible,a:focus-visible{outline:3px solid #49e0dd;outline-offset:3px}
+.btn-primary,#play,#start{background:linear-gradient(#ffe487,#ffc83e 48%,#f4ab25);color:#38280b;border-color:#a77215;border-bottom:4px solid #9c6312;text-shadow:0 1px #fff6;box-shadow:inset 0 2px #fff8,0 3px 0 #08182b66}
+.btn-big{border-radius:14px;letter-spacing:.06em;font-size:21px}
+.btn-ghost{background:transparent;box-shadow:none;border-width:1px}
+.title-hero{position:relative;padding:28px 20px!important;overflow:hidden;background:radial-gradient(ellipse at 50% 35%,#2f78b9 0,#16385f 56%,#102747 100%);border-bottom:2px solid #497197;color:#fff}
+.title-hero .muted{color:#b8d6f0}.title-hero .tag{color:#ffdc7a;background:#07182d55;border:1px solid #c5a65c66;font-size:10px;letter-spacing:.18em}
+.logo.royale-logo{font-family:Impact,'Arial Black',var(--disp);font-size:clamp(48px,12vw,72px);font-weight:900;line-height:.95;letter-spacing:.015em;transform:skew(-4deg);color:#ffda64;text-shadow:0 2px 0 #b16a20,0 5px 0 #754417,0 8px 0 #071d38,0 12px 18px #0006;margin:8px 0 18px;-webkit-text-stroke:1px #ffedaa}
+.royale-logo span{display:block;font-size:.39em;letter-spacing:.25em;color:#eef7ff;-webkit-text-stroke:0;text-shadow:0 3px #15314f;margin-bottom:9px}
+.royale-crest{display:block;margin:0 auto 15px;width:64px;height:70px;filter:drop-shadow(0 4px 0 #061b33)}
+.acr{font-size:11px!important;letter-spacing:.2em!important;color:#d3e7fa!important;text-transform:uppercase}
+.sect{display:flex;align-items:center;gap:10px;color:var(--muted);letter-spacing:.15em;font-size:12px}.sect:after{content:'';height:1px;background:var(--line);flex:1}
+.card,.rc,.part,.planrow{border:1px solid var(--line);background:linear-gradient(135deg,var(--panel),var(--bg));box-shadow:0 3px 0 #06172c25;border-radius:13px}
+.seasoncard,.seasonchip{border:2px solid var(--line);border-bottom-width:4px;border-radius:13px;background:linear-gradient(145deg,var(--panel2),var(--panel));position:relative;overflow:hidden}.seasoncard:after{content:'✦';position:absolute;right:12px;top:35px;font-size:50px;color:var(--blue);opacity:.1;pointer-events:none}.seasoncard .sy{color:var(--text)}.seasoncard .sgo{color:var(--fuel)}
+.topbar{background:linear-gradient(var(--panel2),var(--panel));border-bottom:3px solid #c49a44}.coins{padding:7px 10px;border-radius:20px;border:1px solid #bc934a66;background:#14243d33}.coin{width:18px;height:18px;border:2px solid #ffe99c;background:#eab335;box-shadow:inset 0 0 0 2px #b57b26}
+.preview{background:radial-gradient(ellipse at 50% 45%,#28628c,#142e50 65%,#0a1c36);border-bottom:3px solid #406b92;height:330px!important;isolation:isolate}.preview:after{content:'FRC ROYALE / ROBOT WORKSHOP';position:absolute;bottom:12px;left:0;right:0;text-align:center;font-size:9px;letter-spacing:.2em;color:#a0c7e4;pointer-events:none}.preview .muted{color:#acc9e0}.preview .ov{color:#fff}.preview .tag{background:#0b2039aa}
+.slot{border:1px solid var(--line);border-bottom-width:3px;border-radius:12px;background:linear-gradient(120deg,var(--panel2),var(--panel));min-height:70px}.slot .ic{width:46px;height:46px;background:linear-gradient(135deg,#3475ad,#17375c);border:1px solid #68b7e866;color:#d9efff;box-shadow:inset 0 0 12px #071a3a66}.slot .n{font-weight:800}.slot .k{font-size:10px;letter-spacing:.12em}
+.sheet{border:2px solid var(--line);border-top:3px solid #c49a44;border-radius:22px 22px 0 0;box-shadow:0 -12px 80px #0006}.part.eq{border:2px solid #d5aa4a}.part .specs span{border:1px solid var(--line)}
+.bar{height:10px;border:1px solid #0003}.bar i{background:linear-gradient(90deg,#2689df,#62ddf1);box-shadow:inset 0 2px #ffffff33}
+.mhud{background:linear-gradient(var(--panel2),var(--bg));padding-top:10px}.sb{border:1px solid #fff4;border-bottom:3px solid #081a3644;box-shadow:inset 0 1px #fff3;color:#fff}.clock{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:4px 8px}.clock .t{color:var(--fuel)}
+.fieldwrap canvas{box-shadow:0 0 0 2px #587699,0 4px 18px #0005}.boosts button{border-radius:12px;border-bottom-width:4px}.boosts button .bn{font-weight:900;letter-spacing:.02em}.brandbar .blogo{font-size:22px;letter-spacing:-.04em}.brandbar .bacr{display:none}
+#theme-toggle{z-index:12}.sheet-bg{z-index:20}a{color:var(--blue)}
+.preview .tag.fuel{color:#ffe197;border:1px solid #cca75d55}.preview .tag.ok{color:#74e4bb}.preview .tag.bad{color:#ff9ba4}.preview .pvfoot{color:#edf6ff;bottom:30px}.preview:after{bottom:8px}
+.hubline #theme-toggle{position:static;font-size:10px;min-height:28px;white-space:nowrap;padding:0 6px;box-shadow:none;flex-shrink:0}
+.boost-od{color:#ffdc78!important}.boost-fd{color:#77ecc3!important}.boost-df{color:#ff9ca6!important}.boost-hp{color:#a1c8ff!important}
+@media(min-width:900px){#app{max-width:580px}.sheet{max-width:580px}}
+@media(prefers-reduced-motion:reduce){button{transition:none}}

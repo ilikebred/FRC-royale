@@ -1,35 +1,41 @@
 {
- "name": "BOTS: Build Optimize Team Score",
- "short_name": "BOTS",
- "description": "FRC-inspired robot battler: build a robot, join an alliance, win the season.",
- "id": "./",
- "start_url": "./",
- "scope": "./",
- "display": "standalone",
- "orientation": "portrait",
- "background_color": "#0E1116",
- "theme_color": "#0E1116",
- "categories": [
-  "games"
- ],
- "icons": [
-  {
-   "src": "icons/icon-192.png",
-   "sizes": "192x192",
-   "type": "image/png",
-   "purpose": "any"
-  },
-  {
-   "src": "icons/icon-512.png",
-   "sizes": "512x512",
-   "type": "image/png",
-   "purpose": "any"
-  },
-  {
-   "src": "icons/maskable-512.png",
-   "sizes": "512x512",
-   "type": "image/png",
-   "purpose": "maskable"
-  }
- ]
+  "name": "FRC Royale",
+  "short_name": "FRC Royale",
+  "description": "Build your bot. Rule the arena. An FRC-inspired robotics battle game.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b1b35",
+  "theme_color": "#18365b",
+  "categories": [
+    "games"
+  ],
+  "icons": [
+    {
+      "src": "icons/royale.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
 }

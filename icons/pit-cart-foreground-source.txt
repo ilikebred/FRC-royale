@@ -1,0 +1,2 @@
+Created using the built-in image generation tool from pit-stadium-cart.png.
+Prompt: Extract ONLY the blue wheeled robot cart from this image onto a fully transparent background. Preserve its exact frontal perspective, blue deck, dark rubber top, silver legs and casters. Remove all stadium, sky, floor and background between the legs. Tight crop around cart with small transparent margin. No robot, no text. Game foreground sprite.
