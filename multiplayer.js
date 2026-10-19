@@ -1,6 +1,6 @@
 /* Friend matches: host-ordered simulation frames over Supabase Realtime broadcast.
    No account secrets, profile writes or ranked rewards travel through this channel. */
-const ONLINE_VERSION=2;
+const ONLINE_VERSION=3;
 class MatchRelay{
   constructor(code,onMessage,onError){this.code=code;this.onMessage=onMessage;this.onError=onError;this.ref=0;this.closed=false;this.joined=false}
   connect(){return new Promise((resolve,reject)=>{
@@ -33,7 +33,7 @@ function onlineTeam(raw,year){
       if(compileWaypointAuto(auto,buildStats(build)).error)throw Error('Invalid route');auto.start=AUTO_ENTRIES[auto.entry].slot;
     }else if(a.path?.length){if(!Array.isArray(a.path)||a.path.length>80||a.path.some(p=>!p||!Number.isFinite(p.x)||!Number.isFinite(p.y)||p.x<0||p.x>FW||p.y<0||p.y>FL))throw Error('Invalid route');auto.path=a.path.map(p=>({x:p.x,y:p.y}))}
   }
-  return {num:raw.num,name:raw.name,build,color:raw.color,epa:null,auto};
+  return {num:raw.num,name:raw.name,build,color:raw.color,epa:null,auto,material:['alloy','reinforced','titanium'].includes(raw.material)?raw.material:'alloy',condition:Number.isFinite(raw.condition)?clamp(raw.condition,0,100):100};
 }
 // Commands include a robot index; alliance ownership and boost cooldowns are checked by the host.
 function applyOnlineCommand(run,command,alliance,cooldowns){
@@ -183,23 +183,26 @@ class FriendSession{
   close(){if(this.closed)return;this.send('leave');this.closed=true;this.stopClock();clearInterval(this.timer);this.relay.close()}
 }
 function screenOnlineMatch(session){
-  const run=session.run,m=run.m,A=session.host?'B':'T',own=m.robots.find(r=>r.A===A&&r.isPlayer),SS=SEASONS[session.year],AC={B:'#3E8BFF',T:'#E5484D'};let selected=own;
+  const run=session.run,m=run.m,A=session.localAlliance||(session.host?'B':'T'),own=session.official?m.robots[session.ownIndex]:m.robots.find(r=>r.A===A&&r.isPlayer),SS=SEASONS[session.year],AC={B:'#3E8BFF',T:'#E5484D'};let selected=own;
   show('<div class="online-match"><div class="mhud"><div class="sb" style="background:'+AC[A]+'"><span class="l">Your alliance</span><span class="s" id="online-us">0</span></div><div class="clock"><span class="t" id="online-clock">'+fmtT(m.R.auto)+'</span><span class="p" id="online-phase">AUTO</span></div><div class="sb" style="background:'+AC[A==='B'?'T':'B']+'"><span class="l">Opponent</span><span class="s" id="online-them">0</span></div></div><div class="hubline online-shifts"><div class="hubpill" id="online-hub-us"><span>YOU</span><span class="hub-text"></span></div><div class="hubpill" id="online-hub-them"><span>THEM</span><span class="hub-text"></span></div></div><div class="hubline"><span id="online-state" role="status">Connecting players…</span><button id="online-leave">Leave</button>'+soundBtn()+'</div><div class="fieldwrap"><canvas id="online-field" tabindex="0" aria-label="Match field. Select an allied robot below, then click to add route points."></canvas></div><div class="online-team" role="group" aria-label="Robot to direct">'+m.robots.filter(r=>r.A===A).map(r=>'<button data-robot="'+m.robots.indexOf(r)+'" aria-pressed="'+(r===own)+'">'+r.tm.num+(r===own?' · You':'')+'</button>').join('')+'<button id="online-undo">Undo point</button></div><div class="boosts">'+SS.boosts.map(b=>'<button data-b="'+b.k+'" class="boost-'+b.k+'"><span class="bn">'+b.name+'</span><small class="bs">'+b.sub+'</small><span class="cd"></span></button>').join('')+'</div><p class="online-help">Select a robot to direct its route. Click a boost for your robot; drag it onto any ally. Friendly match · '+session.code+'</p></div>');
   Music.play('match');wireSound();FieldAudio.start(session.year===2026?m:null);
+  const updateCondition=durabilityHUD(app,own);
+  if(session.official){app.querySelector('.online-help').textContent='Official '+session.mode+'v'+session.mode+' · Drive your robot or AI allies. Drag boosts onto any ally.';app.querySelectorAll('[data-robot]').forEach(b=>{if(!session.canControl(+b.dataset.robot)){b.disabled=true;b.title='Controlled by your teammate'}})}
   const leave=()=>{session.close();ONLINE=null;screenPit()};$('#online-leave').onclick=leave;BACK=leave;
-  const cv=$('#online-field'),ctx=cv.getContext('2d'),dpr=Math.min(devicePixelRatio||1,1.5);let scale=10;
-  const fit=()=>{const reserved=[...app.querySelectorAll('.mhud,.hubline,.online-team,.boosts,.online-help')].reduce((sum,el)=>sum+el.offsetHeight,32);scale=Math.max(3,Math.min((app.clientWidth-24)/FW,(innerHeight-reserved)/FL));cv.style.width=FW*scale+'px';cv.style.height=FL*scale+'px';cv.width=Math.round(FW*scale*dpr);cv.height=Math.round(FL*scale*dpr)};fit();window.onresize=fit;
-  const project=(x,y)=>{const p=session.year===2026?arenaProject(x,y):{x,y};return {x:p.x*scale,y:p.y*scale}};
+  const cv=$('#online-field'),ctx=cv.getContext('2d'),dpr=Math.min(devicePixelRatio||1,1.5),wide=innerWidth>=900&&innerWidth>innerHeight*1.2;let scale=10;
+  if(wide)rotCtx(ctx);ctx._rot=wide;
+  const fit=()=>{const reserved=[...app.querySelectorAll('.mhud,.hubline,.online-team,.boosts,.online-help')].reduce((sum,el)=>sum+el.offsetHeight,20),w=wide?FL:FW,h=wide?FW:FL;scale=Math.max(1,Math.min((app.clientWidth-24)/w,(innerHeight-reserved)/h));cv.style.width=w*scale+'px';cv.style.height=h*scale+'px';cv.width=Math.round(w*scale*dpr);cv.height=Math.round(h*scale*dpr)};fit();window.onresize=fit;
+  const project=(x,y)=>{const p=session.year===2026?arenaProject(x,y):{x,y};return wide?{x:p.y*scale,y:(FW-p.x)*scale}:{x:p.x*scale,y:p.y*scale}};
   const send=(r,type,...args)=>session.command(m.robots.indexOf(r),type,...args);
   const drag=wireBoostDrag({canvas:cv,own,robots:m.robots,project,activate:(k,r)=>send(r,'b',k)});
-  cv.onpointerdown=e=>{if(e.button!==0)return;if(m.t<m.R.auto){toast('Robot routes unlock in TELEOP');return}const rc=cv.getBoundingClientRect(),p={x:(e.clientX-rc.left)/scale,y:(e.clientY-rc.top)/scale},q=session.year===2026?arenaUnproject(p.x,p.y):p;send(selected,'p',+q.x.toFixed(3),+q.y.toFixed(3))};
+  cv.onpointerdown=e=>{if(e.button!==0)return;if(m.t<m.R.auto){toast('Robot routes unlock in TELEOP');return}const rc=cv.getBoundingClientRect(),x=(e.clientX-rc.left)/scale,y=(e.clientY-rc.top)/scale,p=wide?{x:FW-y,y:x}:{x,y},q=session.year===2026?arenaUnproject(p.x,p.y):p;send(selected,'p',+q.x.toFixed(3),+q.y.toFixed(3))};
   cv.oncontextmenu=e=>{e.preventDefault();send(selected,'u')};$('#online-undo').onclick=()=>send(selected,'u');
   app.querySelectorAll('[data-robot]').forEach(b=>b.onclick=()=>{selected=m.robots[+b.dataset.robot];app.querySelectorAll('[data-robot]').forEach(x=>x.setAttribute('aria-pressed',x===b))});
   session.startClock();
   const loop=now=>{
     if(ONLINE!==session)return;
-    if(m.over){screenOnlineResults(session);return}
-    ctx.setTransform(dpr,0,0,dpr,0,0);m.renderAlpha=Math.min(1,Math.max(0,(performance.now()-session.clockLast)/1000+(session.clockDebt||0))*30);m.draw(ctx,scale,AC,selected);PerformanceUI.tick(now);drag.draw(ctx,scale);
+    if(m.over){screenOnlineResults(session);return}updateCondition();
+    ctx.setTransform(dpr,0,0,dpr,0,0);if(wide){ctx.translate(0,FW*scale);ctx.rotate(-Math.PI/2)}m.renderAlpha=Math.min(1,Math.max(0,(performance.now()-session.clockLast)/1000+(session.clockDebt||0))*30);m.draw(ctx,scale,AC,selected);PerformanceUI.tick(now);ctx.setTransform(dpr,0,0,dpr,0,0);drag.draw(ctx,scale);
     const ph=m.phase();$('#online-us').textContent=m.total(A);$('#online-them').textContent=m.total(A==='B'?'T':'B');$('#online-clock').textContent=fmtT(ph.clock);$('#online-phase').textContent=m.over?'FINAL':ph.name;
     for(const [id,alliance] of [['online-hub-us',A],['online-hub-them',A==='B'?'T':'B']]){const pill=$('#'+id),hud=m.hud(alliance);pill.classList.toggle('on',hud.on);pill.style.background=hud.on?AC[alliance]:'';pill.querySelector('.hub-text').textContent=hud.text}
     if(!session.closed)$('#online-state').textContent=Date.now()-session.lastSeen>4000?'Waiting for opponent connection…':session.started?'Live · '+(A==='B'?'Blue':'Red')+' alliance':'Waiting for host…';
@@ -209,7 +212,7 @@ function screenOnlineMatch(session){
 }
 
 function onlineResultData(session){
-  const m=session.run.m,A=session.host?'B':'T',O=A==='B'?'T':'B',own=m.robots.find(r=>r.A===A&&r.isPlayer),colors={B:'#3E8BFF',T:'#E5484D'};
+  const m=session.run.m,A=session.localAlliance||(session.host?'B':'T'),O=A==='B'?'T':'B',own=session.official?m.robots[session.ownIndex]:m.robots.find(r=>r.A===A&&r.isPlayer),colors={B:'#3E8BFF',T:'#E5484D'};
   const side=alliance=>({color:colors[alliance],name:alliance==='B'?'Blue':'Red',score:m.total(alliance),extras:m.sideExtras(alliance),fouls:m.sc[alliance==='B'?'T':'B'].foul,bots:m.robots.filter(r=>r.A===alliance).map(r=>({...m.robotLine(r),you:r===own})).sort((a,b)=>b.pts-a.pts)});
   const us=side(A),them=side(O);
   return {us,them,result:us.score>them.score?'win':us.score<them.score?'loss':'tie',rows:m.breakdown(A,O),cols:m.contribCols,chips:m.rpInfo(A).chips};
@@ -217,9 +220,15 @@ function onlineResultData(session){
 function screenOnlineResults(session){
   session.stopClock();FieldAudio.stop();Music.stop();
   const data=onlineResultData(session),{us,them,result}=data;
+  const reward=session.official?session.settle():null;
   Music.jingle(result==='win');
   const contribution=(side,label)=>`<div class="card contrib"><div class="row"><b class="disp grow" style="color:${side.color}">${label} · ${side.name.toUpperCase()}</b><b class="disp" style="font-size:24px">${side.score}</b></div><table class="ct"><thead><tr><th>Team</th>${data.cols.map(c=>`<th>${esc(c)}</th>`).join('')}<th>Pts</th></tr></thead><tbody>${side.bots.map(b=>`<tr class="${b.you?'you':''}"><td><b class="disp">${b.num}</b>${b.you?' <span class="tag fuel">YOU</span>':''}<div class="tn">${esc(b.name)}</div></td>${b.c.map(c=>`<td>${c[0]}<div class="tn">${esc(String(c[1]))}</div></td>`).join('')}<td><b>${b.pts}</b>${b.fouls?`<div class="tn">${b.fouls} fouls</div>`:''}</td></tr>`).join('')}${side.extras.map(e=>`<tr class="sub"><td>${esc(e[0])}</td><td>${e[1]}</td><td>—</td><td><b>${e[1]}</b></td></tr>`).join('')}${side.fouls?`<tr class="sub"><td>Foul points from opponents</td><td>—</td><td>—</td><td><b>${side.fouls}</b></td></tr>`:''}</tbody></table></div>`;
   show(`<div class="online-summary"><div class="brandbar"><div class="blogo">FRC Royale</div><div class="tag">${session.year} · ${esc(SEASONS[session.year].name)}</div></div><div class="banner"><h1 style="color:${result==='win'?'var(--ok)':result==='loss'?'var(--red)':'var(--fuel)'}">${result==='win'?'VICTORY':result==='loss'?'DEFEAT':'TIE'}</h1><div class="final"><span style="color:${us.color}">${us.score}</span><span class="muted" style="font-size:20px">–</span><span style="color:${them.color}">${them.score}</span></div><p class="muted">Friendly match complete</p></div><div class="pad col">${contribution(us,'Your alliance')}${contribution(them,'Opponents')}<div class="card"><table class="bd"><thead><tr><th>Score breakdown</th><th style="color:${us.color}">YOU</th><th style="color:${them.color}">THEM</th></tr></thead><tbody>${data.rows.map(r=>`<tr><td>${esc(r[0])}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('')}<tr><td><b>TOTAL</b></td><td><b>${us.score}</b></td><td><b>${them.score}</b></td></tr></tbody></table></div><div class="card col"><b class="disp">Match objectives</b><div class="rp">${data.chips.map(c=>`<span class="${c[1]?'got':''}">${esc(c[0])}</span>`).join('')}</div><p class="muted">Friendly matches do not award coins or ranking points.</p></div><div class="row"><button class="grow" id="online-result-pit">Pit</button><button class="btn-primary grow" id="online-result-again">Play with a friend</button></div></div></div>`);
   const exit=next=>{session.close();if(ONLINE===session)ONLINE=null;next()};
-  $('#online-result-pit').onclick=()=>exit(screenPit);$('#online-result-again').onclick=()=>exit(screenOnline);BACK=()=>exit(screenPit);
+  if(session.official){
+    app.querySelector('.banner p').textContent='Official '+session.mode+'v'+session.mode+' match complete';
+    const note=app.querySelector('.card.col p');if(note)note.textContent=reward?'+'+reward.total+' coins · Contribution '+reward.performance+' · Result '+reward.outcome+' · Objectives '+reward.objectives+' · Robot care '+reward.care+' · Fouls −'+reward.fouls+'. Condition: '+Math.ceil(robotCondition(session.run.m.robots[session.ownIndex].durability))+'%. Repair in the workbench.':'Match ended without rewards.';
+    $('#online-result-again').textContent='Find next match';
+  }
+  $('#online-result-pit').onclick=()=>exit(screenPit);$('#online-result-again').onclick=()=>exit(session.official?screenMatchmaking:screenOnline);BACK=()=>exit(screenPit);
 }

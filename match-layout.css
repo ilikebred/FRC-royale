@@ -1,0 +1,22 @@
+/* Match controls support the field, while retaining usable drag targets. */
+#app:has(#fc),#app:has(#online-field){max-width:none;width:100%;min-height:100dvh}
+.online-match{max-width:none}
+body #app:has(.fieldwrap) .mhud{padding:4px 8px;gap:6px}
+body #app:has(.fieldwrap) .sb{padding:5px 10px;min-height:0;border-radius:9px}
+body #app:has(.fieldwrap) .sb .s{font-size:28px}
+body #app:has(.fieldwrap) .sb .l{font-size:10px}
+body #app:has(.fieldwrap) .clock{padding:4px 10px;min-width:80px}
+body #app:has(.fieldwrap) .clock .t{font-size:25px}
+body #app:has(.fieldwrap) .clock .p{font-size:10px}
+body #app:has(.fieldwrap) .hubline{padding:2px 8px;min-height:0;flex-wrap:wrap;gap:4px}
+body #app:has(.fieldwrap) .hubpill{padding:5px 8px;min-height:28px;font-size:11px}
+body #app:has(.fieldwrap) .hubline button{min-height:36px;padding:5px 10px}
+body #app:has(.fieldwrap) .boosts{gap:6px;padding:4px 8px 8px}
+body #app:has(.fieldwrap) .boosts button.boost-card{min-height:64px;padding:8px 8px 10px!important;display:grid;grid-template-columns:28px 1fr;gap:2px 5px;text-align:left;align-content:center}
+body #app:has(.fieldwrap) .boost-card:before{grid-row:1/4;width:25px;height:25px;background-size:17px}
+body #app:has(.fieldwrap) .boost-card .bn{font-size:11px}
+body #app:has(.fieldwrap) .boost-card .bs,body #app:has(.fieldwrap) .boost-drag-cue{font-size:9px}
+.online-team{padding:3px 8px;gap:5px}.online-team button{min-height:36px;padding:5px 10px}
+.online-help{margin:2px 8px;font-size:10px}.robot-condition{display:flex;gap:5px;align-items:center;font-size:10px;margin-left:auto;min-height:24px}.robot-condition meter{width:55px;height:12px}.robot-condition.damaged{color:var(--red);font-weight:bold}
+.durability-shop{margin-bottom:24px}.durability-shop p{line-height:1.5}.material-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}.material-options button{display:flex;flex-direction:column;gap:10px;padding:18px 12px}.material-options span{font-size:12px;font-weight:normal;line-height:1.4}.queue-modes{display:flex;gap:10px}.queue-modes button{flex:1;min-height:64px}.queue-modes [aria-pressed=true]{background:var(--fuel);color:#142b4c}.queue-roster{font-variant-numeric:tabular-nums;font-size:24px;font-weight:700}.queue-cancel{min-height:44px}
+@media(max-width:540px){body #app:has(.fieldwrap) .boosts button.boost-card{display:flex;gap:2px;min-height:70px;padding:7px 3px 10px!important;text-align:center}body #app:has(.fieldwrap) .boost-card:before{width:20px;height:20px;background-size:14px}body #app:has(.fieldwrap) .boost-card .bs{display:none}.robot-condition{width:100%;justify-content:center}.material-options{grid-template-columns:1fr}.material-options button{min-height:100px}}

@@ -42,6 +42,7 @@ function polishPit(st,model){
   const drawer=document.createElement('section');drawer.className='pit-drawer';drawer.hidden=true;
   drawer.innerHTML='<header><button id="close-workshop" aria-label="Back to pit">'+(ICONS.back||ICONS.x)+' Back</button><h1></h1></header>';
   const panels=[groups[0],groups[1],options];panels.forEach(p=>{p.classList.add('pit-drawer-content');p.hidden=true;drawer.append(p)});
+  mountDurabilityShop(groups[0]);
   const titles=['Workbench','Autonomous pathing','Options'];
   const select=i=>{PIT_SECTION=i;app.classList.toggle('pit-detail',i!==null);drawer.hidden=i===null;workspace.hidden=i!==null;panels.forEach((p,j)=>p.hidden=j!==i);if(i!==null){drawer.querySelector('h1').textContent=titles[i];drawer.querySelector('#close-workshop').focus()}else{workspace.querySelector('#open-hardware').focus()}BACK=i===null?screenMenu:()=>select(null);window.onresize?.()};
   drawer.querySelector('#close-workshop').onclick=()=>select(null);
