@@ -14,7 +14,7 @@ Completed official matches pay coins based on personal contribution, match outco
 
 Robots have condition and heat meters. In 2026, hard impacts damage the frame and sustained firing/overdrive generates heat. At 85% heat, launcher output halves; continued overheating causes wear. Idling cools the robot. Below 35% condition, speed/intake/output fall to 65%; at zero the robot breaks until repaired. Official damage persists when returning to the pit, including leaving an unfinished match. The workbench offers repairs at two coins per missing condition point, Reinforced alloy (650 coins, 1.6× durability), and Titanium composite (1,600 coins, 2.5× durability). Material purchases do not refill condition. Older replay recordings retain their original simulation rules.
 
-Match controls are compact, and wide desktop windows turn the field horizontally to use more of the screen. Boosts keep their card appearance and drag cue.
+Match controls are compact, and the field stays vertical on every screen size, including multiplayer and replays. Boosts keep their card appearance and drag cue.
 
 Matchmaking uses public Realtime discovery and a browser host, not a dedicated authoritative game server. Local saves and client-hosted results are not cheat-resistant; server-validated accounts/rewards remain a separate backend project. Closing the host browser or losing a player ends an unfinished match without rewards. See [BACKEND_SETUP.md](BACKEND_SETUP.md).
 

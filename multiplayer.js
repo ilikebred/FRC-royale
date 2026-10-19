@@ -189,7 +189,7 @@ function screenOnlineMatch(session){
   const updateCondition=durabilityHUD(app,own);
   if(session.official){app.querySelector('.online-help').textContent='Official '+session.mode+'v'+session.mode+' · Drive your robot or AI allies. Drag boosts onto any ally.';app.querySelectorAll('[data-robot]').forEach(b=>{if(!session.canControl(+b.dataset.robot)){b.disabled=true;b.title='Controlled by your teammate'}})}
   const leave=()=>{session.close();ONLINE=null;screenPit()};$('#online-leave').onclick=leave;BACK=leave;
-  const cv=$('#online-field'),ctx=cv.getContext('2d'),dpr=Math.min(devicePixelRatio||1,1.5),wide=innerWidth>=900&&innerWidth>innerHeight*1.2;let scale=10;
+  const cv=$('#online-field'),ctx=cv.getContext('2d'),dpr=Math.min(devicePixelRatio||1,1.5),wide=false;let scale=10;
   if(wide)rotCtx(ctx);ctx._rot=wide;
   const fit=()=>{const reserved=[...app.querySelectorAll('.mhud,.hubline,.online-team,.boosts,.online-help')].reduce((sum,el)=>sum+el.offsetHeight,20),w=wide?FL:FW,h=wide?FW:FL;scale=Math.max(1,Math.min((app.clientWidth-24)/w,(innerHeight-reserved)/h));cv.style.width=w*scale+'px';cv.style.height=h*scale+'px';cv.width=Math.round(w*scale*dpr);cv.height=Math.round(h*scale*dpr)};fit();window.onresize=fit;
   const project=(x,y)=>{const p=session.year===2026?arenaProject(x,y):{x,y};return wide?{x:p.y*scale,y:(FW-p.x)*scale}:{x:p.x*scale,y:p.y*scale}};

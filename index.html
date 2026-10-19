@@ -36131,8 +36131,8 @@ function screenMatch(){
     el.querySelector('#keep').onclick=()=>{el.remove();PAUSED=false};
     el.querySelector('#quit').onclick=()=>{el.remove();window.onresize=null;Music.play('menu');screenPit()}};
   const cv=$('#fc'), fw=$('#fw'), ctx=cv.getContext('2d'), dpr=Math.min(window.devicePixelRatio||1,1.5); let S=10;
-  // TV / wide screens: the field is drawn turned on its side (long way across), labels stay upright
-  const TVL=innerWidth>=900&&innerWidth>innerHeight*1.2; if(TVL){app.classList.add('tvmatch');rotCtx(ctx)} ctx._rot=TVL;
+  // Keep the field vertical on every screen size.
+  const TVL=false; if(TVL){app.classList.add('tvmatch');rotCtx(ctx)} ctx._rot=TVL;
   const fit=()=>{if(TVL){const top=$('.mhud').offsetHeight, bot=Math.max(...[...app.querySelectorAll('.boosts,.piecebar')].map(x=>x.getBoundingClientRect().bottom-x.getBoundingClientRect().top),0),
       availH=innerHeight-top-bot-$('.hubline').offsetHeight-[...app.querySelectorAll('.piecebar')].reduce((s,x)=>s+x.offsetHeight,0)-20,availW=innerWidth-24;S=Math.max(1,Math.min(availW/FL,availH/FW));cv.style.width=FL*S+'px';cv.style.height=FW*S+'px';cv.width=FL*S*dpr;cv.height=FW*S*dpr;requestAnimationFrame(()=>placeCur());return}
     const availH=window.innerHeight-$('.mhud').offsetHeight-$('.hubline').offsetHeight-$('.boosts').offsetHeight-[...app.querySelectorAll('.piecebar')].reduce((s,x)=>s+x.offsetHeight,0)-12,availW=fw.clientWidth-8;S=Math.max(1,Math.min(availW/FW,availH/FL));cv.style.width=FW*S+'px';cv.style.height=FL*S+'px';cv.width=FW*S*dpr;cv.height=FL*S*dpr;requestAnimationFrame(()=>placeCur())};
@@ -37046,7 +37046,7 @@ function screenReplay(S,fresh){
   BACK=()=>screenSummary(S,fresh);
   $('#rbk').onclick=BACK;
   const cv=$('#fc'), fw=$('#fw'), ctx=cv.getContext('2d'), dpr=Math.min(window.devicePixelRatio||1,1.5); let Sc=10;
-  const ROT=IS_TV&&innerWidth>innerHeight*1.2; if(ROT){rotCtx(ctx);app.classList.add('tvreplay')} ctx._rot=ROT;   // TV: field turned landscape, like the match screen
+  const ROT=false; if(ROT){rotCtx(ctx);app.classList.add('tvreplay')} ctx._rot=ROT;   // Replays use the same vertical field as live matches
   const fit=()=>{const availH=window.innerHeight-$('.topbar').offsetHeight-$('.mhud').offsetHeight-$('.rpctl').offsetHeight-$('#rsh').offsetHeight-40,availW=fw.clientWidth-8;Sc=ROT?Math.max(4,Math.min((innerWidth-24)/FL,availH/FW)):Math.max(4,Math.min(availW/FW,availH/FL));const w=ROT?FL:FW,h=ROT?FW:FL;cv.style.width=w*Sc+'px';cv.style.height=h*Sc+'px';cv.width=w*Sc*dpr;cv.height=h*Sc*dpr};
   fit(); window.onresize=fit;
   const pp=$('#rpp'), sl=$('#rsl');
@@ -37228,7 +37228,7 @@ function shareChooser(S){
 <script src="field-audio.js?v=48"></script>
 <script src="waypoint-auto.js?v=26"></script>
 <script src="boost-targeting.js?v=48"></script>
-<script src="multiplayer.js?v=50"></script>
+<script src="multiplayer.js?v=52"></script>
 <script src="gameplay.js?v=50"></script>
 <script src="matchmaking.js?v=51"></script>
 <link rel="stylesheet" href="match-layout.css?v=50">
