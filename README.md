@@ -8,6 +8,23 @@ The pit has a reference-inspired game lobby with large Workbench, Autonomous pat
 
 ## Official matches, practice, and durability
 
+The pit progress bar is a permanent competitive rank, shared across district and regional teams. Existing earned RP is retained. Each promotion costs twice as much RP as the previous promotion:
+
+| Rank | Total RP to unlock |
+| --- | ---: |
+| Week 1 | 0 |
+| Week 2 | 40 |
+| Week 3 | 120 |
+| Week 4 | 280 |
+| Week 5 | 600 |
+| District Championships | 1,240 |
+| World Championship | 2,520 |
+| Einstein Championships | 5,080 |
+
+Official matches against humans award the game's match RP and update W–L–T, matches played, RP average, and Past Matches as soon as the simulation finishes, including while the tab is hidden. Results are attached to the profile that entered the match and deduplicated by match ID. Older online matches that were never saved cannot have their score breakdowns reconstructed.
+
+Matchmaking compares continuous rank progress: everyone in a room must be within 20% of one rank step. Week 1 therefore allows at most an 8-RP spread; top Week 1 can match nearby bottom Week 2, but cannot match bottom Week 1 or Week 4. The allowable RP spread grows with the rank requirements. Einstein continues using 5,120 RP per matching step. Multi-player alliances are balanced by their total rank progress. The range never widens over time, so sparse queues may take longer. Both players need the current build; ranking remains local and is not a server-verified rating.
+
 **Play** opens the public Supabase matchmaking queue. Choose 1v1 (one human plus two AI robots per alliance), 2v2 (two humans plus one AI), or 3v3 (all human drivers). Players must search in the same season, mode, and protocol version. The queue waits for real opponents and can be cancelled. Each person controls their robot and any AI teammate; they cannot drive another human's robot. Boosts can target any ally, with shared alliance cooldowns.
 
 Completed official matches pay coins based on personal contribution, match outcome, alliance objectives, robot condition, and foul penalties. The results screen shows the breakdown. Rewards apply once per session. Official matches update local RP and records; they do not submit results to the old creator's backend. Practice awards **zero coins and zero RP**, preserves the competitive record, starts with a healthy robot, and does not persist damage. Friendly room matches remain unranked.

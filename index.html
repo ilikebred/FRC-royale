@@ -30484,30 +30484,30 @@ SEASONS[2026].parseTeam=p=>({af:+p[5],fuel:+p[6],tower:+p[7]});
 SEASONS[2026].rankKeys=[['fuel','fpct'],['af','apct']];
 const districtName=d=>DISTRICTS[d]||d.toUpperCase();
 
-/* the ladder depends on whether you're a district team */
-function leagues(p=SAVE){
-  const d=p&&p.team&&p.team.district, db=teamDB(p&&p.season||2026);
-  if(d&&db.BY_DISTRICT[d]){const n=districtName(d);return [
-    {name:n+' District Event #1',min:0,pool:'d',band:[0,1]},
-    {name:n+' District Event #2',min:LEVEL_RP[1],pool:'d',band:[0,.8]},
-    {name:n+' District Championship',min:LEVEL_RP[2],pool:'d',band:[0,.45]},
-    {name:'World Championship',min:LEVEL_RP[3],pool:'h',band:[.2,1]},
-    {name:'Einstein Field',min:LEVEL_RP[4],pool:'h',band:[0,.12]}]}
-  return [
-    {name:'Week 1 Regional',min:0,pool:'h',band:[.55,1]},
-    {name:'Week 4 Regional',min:LEVEL_RP[1],pool:'h',band:[.35,.85]},
-    {name:'Championship Division',min:LEVEL_RP[2],pool:'h',band:[.15,.6]},
-    {name:'Championship Playoffs',min:LEVEL_RP[3],pool:'h',band:[0,.35]},
-    {name:'Einstein Field',min:LEVEL_RP[4],pool:'h',band:[0,.12]}];
-}
-/* progression: ranking points (RP) earned in qualification matches move a robot up the ladder (SAVE.trophies holds
-   the RP total). Finishing an event's RP goal wins its BLUE BANNER; the last goal is winning Einstein. */
-const LEVEL_RP=[0,14,30,50,75], CHAMP_RP=105;
-const levelGoal=(i,p)=>i+1<leagues(p).length?leagues(p)[i+1].min:CHAMP_RP;
+/* Persistent competitive rank. Each promotion costs twice the previous one. */
+const LEVEL_RP=[0,40,120,280,600,1240,2520,5080], CHAMP_RP=5080;
+const RANK_NAMES=['Week 1','Week 2','Week 3','Week 4','Week 5','District Championships','World Championship','Einstein Championships'];
+function leagues(p=SAVE){return RANK_NAMES.map((name,i)=>({name,min:LEVEL_RP[i],pool:'h',band:[Math.max(0,.55-i*.08),Math.max(.12,1-i*.12)]}))}
+const levelGoal=(i,p)=>LEVEL_RP[Math.min(i+1,LEVEL_RP.length-1)];
 function awardBanners(p,before,after){
-  const LG=leagues(p), out=[];
-  LG.forEach((lg,i)=>{const g=levelGoal(i,p);if(before<g&&after>=g)out.push({name:lg.name,season:p.season,level:i,date:Date.now()})});
-  p.banners=(p.banners||[]).concat(out); return out;
+  const out=LEVEL_RP.flatMap((goal,i)=>i>0&&before<goal&&after>=goal?[{name:RANK_NAMES[i],season:p.season,level:i,date:Date.now(),rank:true}]:[]);
+  p.banners=(p.banners||[]).concat(out);return out;
+}
+function rankPosition(rp){const i=leagueOf(rp),span=i<7?LEVEL_RP[i+1]-LEVEL_RP[i]:5120;return i+(Math.max(0,rp)-LEVEL_RP[i])/span}
+const closeRanks=(a,b)=>Math.abs(rankPosition(a)-rankPosition(b))<=.200001;
+function rankBadge(rp){
+  const i=leagueOf(rp),colors=['#bd8859','#91b8cc','#57c79f','#52a8ff','#bb87ef','#f2c348','#6ce5f1','#ed8acb'];
+  const emblems=[
+    '<path d="m20 34 12-10 12 10"/>',
+    '<path d="m20 28 12-10 12 10m-24 12 12-10 12 10"/>',
+    '<path d="m20 23 12-10 12 10m-24 10 12-10 12 10m-24 10 12-10 12 10"/>',
+    '<path fill="#fff1b8" d="m32 14 5 10 11 2-8 8 2 11-10-5-10 5 2-11-8-8 11-2z"/>',
+    '<path fill="#fff1b8" d="m32 12 6 12 12 2-9 9 2 13-11-6-11 6 2-13-9-9 12-2z"/><path d="M10 24v16m44-16v16"/>',
+    '<path fill="#fff1b8" d="M22 16h20v15q0 13-10 13T22 31z"/><path d="M22 20H15v9q0 8 9 8m18-17h7v9q0 8-9 8M32 44v7m-9 0h18"/>',
+    '<circle cx="32" cy="31" r="17"/><ellipse cx="32" cy="31" rx="8" ry="17"/><path d="M15 31h34M19 22h26M19 40h26"/>',
+    '<ellipse cx="32" cy="31" rx="22" ry="9"/><ellipse cx="32" cy="31" rx="22" ry="9" transform="rotate(60 32 31)"/><ellipse cx="32" cy="31" rx="22" ry="9" transform="rotate(120 32 31)"/><circle fill="#fff1b8" cx="32" cy="31" r="4"/>'
+  ];
+  return '<svg class="rank-badge" viewBox="0 0 64 68" role="img" aria-label="'+RANK_NAMES[i]+' rank"><path fill="'+colors[i]+'" stroke="#081c3b" stroke-width="3" d="M32 3 59 13v27L32 64 5 40V13z"/><path fill="none" stroke="#ffffff80" stroke-width="2" d="m10 16 22-8 22 8"/><g fill="none" stroke="#102e59" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">'+emblems[i]+'</g></svg>';
 }
 
 /* build a robot that reflects a real team's Statbotics profile, scaled to the league tier */
@@ -35795,10 +35795,10 @@ function screenPit(){
     <div class="pvfoot"><span class="weight ${over?'over':''}">${st.weight} / ${S.weightLimit} lb${over?' · over':''}</span>${(h=>`<span class="tag ${h.ok?'ok':'bad'}">${h.text}</span>`)(S.heightTag(st,model))}</div>
   </div>
   <div class="pad col">
-    <div class="card league"><div class="lb"><div class="disp" style="font-weight:700">${LG[lg].name}</div>
-      <div class="bar" style="margin-top:6px"><i style="background:var(--fuel);width:${clamp((SAVE.trophies-LG[lg].min)/(levelGoal(lg,SAVE)-LG[lg].min)*100,3,100)}%"></i></div>
-      <div class="muted" style="font-size:12px;margin-top:4px">${SAVE.trophies} / ${levelGoal(lg,SAVE)} RP ${SAVE.trophies>=CHAMP_RP?'· world champions!':'to win this event'+(next?' and move up to '+next.name:'')}</div>
-      ${bannerStrip(SAVE)}</div>
+    <div class="card league"><div class="lb"><div class="rank-heading">${rankBadge(SAVE.trophies)}<div><strong>${LG[lg].name}</strong><small>Competitive rank</small></div></div>
+      <div class="bar" style="margin-top:6px"><i style="background:var(--fuel);width:${next?clamp((SAVE.trophies-LG[lg].min)/(next.min-LG[lg].min)*100,0,100):100}%"></i></div>
+      <div class="muted" style="font-size:12px;margin-top:4px">${next?SAVE.trophies+' / '+next.min+' RP · '+(next.min-SAVE.trophies)+' RP to '+next.name:SAVE.trophies+' RP · Highest rank achieved'}</div>
+      <div class="muted" style="font-size:12px;margin-top:6px">Earn RP in official matches against real players.</div></div>
       <div style="text-align:right"><div class="disp" style="font-weight:700">${r.w}-${r.l}-${r.t}</div><div class="muted" style="font-size:12px">${r.played?(r.rp/r.played).toFixed(2):'0.00'} RP avg</div></div></div>
     <div class="row" style="gap:8px"><button class="btn-ghost grow" id="past">${ICONS.history}Matches${(SAVE.matches||[]).length?' · '+SAVE.matches.length:''}</button><button class="btn-ghost grow" id="lbp">${ICONS.trophy}Leaderboards</button></div>
     ${SEASON_GUIDE[S.year]?`<button class="btn-ghost" id="guide">${ICONS.auto}Game guide · ${S.year} ${esc(S.name)}</button>`:''}
@@ -35919,7 +35919,7 @@ function screenMenu(){
     if(!seasonOpen(p.season)) return `<button class="seasonchip locked" disabled aria-label="${p.season} ${SEASONS[p.season].name}: coming soon"><span class="sy">${p.season}</span><span class="sn">${SEASONS[p.season].name.replace("FIRST ","")}</span><span class="ss">${ICONS.lock} Coming soon</span><span class="ss">Robot saved</span></button>`;
     return `<button class="seasonchip${cur&&cur.id===p.id?' cur':''}" data-resume="${p.id}" aria-label="Play ${p.season} ${SEASONS[p.season].name}">
       <span class="sy">${p.season}</span><span class="sn">${SEASONS[p.season].name.replace("FIRST ","")}</span>
-      <span class="ss">${esc(lg.name.replace(' District Event',' Dist.').replace('Championship','Champs'))}</span><span class="ss">${(p.banners||[]).length?`<i class="bbdot"></i>×${p.banners.length} · `:''}${p.trophies} RP</span><span class="ss">${p.rec.w}-${p.rec.l}-${p.rec.t} · ${powerOf(buildStats(buildOf(p),p.season),p.season)} PWR</span></button>`};
+      <span class="ss">${esc(lg.name.replace(' District Event',' Dist.').replace(/Championships?/g,'Champs'))}</span><span class="ss">${(p.banners||[]).length?`<i class="bbdot"></i>×${p.banners.length} · `:''}${p.trophies} RP</span><span class="ss">${p.rec.w}-${p.rec.l}-${p.rec.t} · ${powerOf(buildStats(buildOf(p),p.season),p.season)} PWR</span></button>`};
   const card=g=>{const L=g.latest, missing=openSeasons().filter(y=>!g.list.some(p=>p.season===y));
     return `<div class="teamcard"><div class="row" style="gap:10px;align-items:center"><div class="rcswatch" style="background:${L.color}"></div>
       <div class="grow" style="min-width:0"><div class="row" style="gap:8px"><span class="teamno" style="font-size:22px">${g.num}</span><span class="nm">${esc(L.team.name)}</span></div>
@@ -36242,7 +36242,7 @@ function screenSummary(S,fresh){
     <div class="final"><span style="color:${S.us.color}">${S.my}</span><span class="muted" style="font-size:20px">–</span><span style="color:${S.them.color}">${S.th}</span></div></div>
   <div class="pad col" style="padding-top:0">
     ${(S.newBanners||[]).map(b=>blueBannerHTML(b,S.season.year)).join('')}
-    ${S.promoted&&fresh?`<div class="card" style="border-color:var(--fuel);text-align:center"><b class="disp" style="color:var(--fuel)">NEXT EVENT</b><div>You've advanced to ${esc(S.leagueAfter)}. Opponents just got tougher.</div></div>`:''}
+    ${S.promoted&&fresh?`<div class="card" style="border-color:var(--fuel);text-align:center"><b class="disp" style="color:var(--fuel)">RANK UP</b><div>Your rank is now ${esc(S.leagueAfter)}.</div></div>`:''}
     ${S.practice?`<div class="card" style="text-align:center;border-color:#8DB9FF"><b class="disp" style="color:#8DB9FF">PRACTICE MATCH</b><div class="muted" style="font-size:13px">No coins, record changes, ranking points, or lasting damage.</div></div>`:''}
     ${contrib(S.us,'Your alliance')}
     ${contrib(S.them,'Opponents')}
@@ -36390,14 +36390,14 @@ async function shareSummary(S){
   finally{if(btn) btn.disabled=false}
 }
 /* ---------- practice matches + blue banners ---------- */
-const matchLabel=S=>S.practice?'Practice '+S.qual:'Qual '+S.qual;
+const matchLabel=S=>S.practice?'Practice '+S.qual:S.official?'Official '+S.mode+'v'+S.mode+' · '+S.qual:'Qual '+S.qual;
 let LAST_PRACTICE=null;   // the line-up the player last picked
 /* a FIRST-style blue banner for winning an event (shown on the summary when it's earned) */
 function blueBannerHTML(b,year){
-  const champ=b.level>=4;
+  const champ=b.rank?b.level===7:b.level>=4;
   return `<div class="bluebanner" role="img" aria-label="Blue banner: ${esc(b.name)} ${champ?'champions':'winner'}"><div class="bbflag">
-    <div class="bbtop">FRC Royale · ${year||b.season}</div><div class="bbtitle">${esc(champ?'Einstein Champions':b.name)}</div><div class="bbsub">${champ?'World Champions':'Event Winner'}</div></div>
-    <div class="bbcap">BLUE BANNER EARNED</div></div>`;
+    <div class="bbtop">FRC Royale · ${year||b.season}</div><div class="bbtitle">${esc(b.rank?b.name:champ?'Einstein Champions':b.name)}</div><div class="bbsub">${b.rank?'Rank Achieved':champ?'World Champions':'Event Winner'}</div></div>
+    <div class="bbcap">${b.rank?'RANK UNLOCKED':'BLUE BANNER EARNED'}</div></div>`;
 }
 /* small banner row for the Pit */
 function bannerStrip(p){
@@ -37228,10 +37228,10 @@ function shareChooser(S){
 <script src="field-audio.js?v=48"></script>
 <script src="waypoint-auto.js?v=26"></script>
 <script src="boost-targeting.js?v=48"></script>
-<script src="multiplayer.js?v=52"></script>
+<script src="multiplayer.js?v=53"></script>
 <script src="gameplay.js?v=50"></script>
-<script src="matchmaking.js?v=51"></script>
-<link rel="stylesheet" href="match-layout.css?v=50">
+<script src="matchmaking.js?v=53"></script>
+<link rel="stylesheet" href="match-layout.css?v=53">
 <script>
 /* ---------- boot ---------- */
 load();

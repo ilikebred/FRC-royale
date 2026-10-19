@@ -227,6 +227,7 @@ function screenOnlineResults(session){
   const exit=next=>{session.close();if(ONLINE===session)ONLINE=null;next()};
   if(session.official){
     app.querySelector('.banner p').textContent='Official '+session.mode+'v'+session.mode+' match complete';
+    const rank=document.createElement('div');rank.className='rank-result';rank.innerHTML=rankBadge(session.profile.trophies)+'<span><strong>'+leagues(session.profile)[leagueOf(session.profile.trophies)].name+'</strong><br>+'+session.run.m.rpInfo(session.localAlliance).n+' RP · '+session.profile.trophies+' total RP</span>';app.querySelector('.banner').append(rank);
     const note=app.querySelector('.card.col p');if(note)note.textContent=reward?'+'+reward.total+' coins · Contribution '+reward.performance+' · Result '+reward.outcome+' · Objectives '+reward.objectives+' · Robot care '+reward.care+' · Fouls −'+reward.fouls+'. Condition: '+Math.ceil(robotCondition(session.run.m.robots[session.ownIndex].durability))+'%. Repair in the workbench.':'Match ended without rewards.';
     $('#online-result-again').textContent='Find next match';
   }

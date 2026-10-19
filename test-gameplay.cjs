@@ -67,7 +67,7 @@ globalThis.sessionChecks=()=>{
  for(const mode of [1,2,3]){
    SAVE=freshSave(2026);SAVE.team={num:254,name:'Testing'};
    const roster=Array.from({length:mode*2},(_,i)=>({id:String(i+1).padStart(20,'0'),team:{...queueTeam(),num:100+i}}));
-   const offer={code:'AAAABBCCDD',players:roster},sessions=roster.map(p=>new OfficialSession(offer,p.id,mode,()=>{})),host=sessions[0];
+   const offer={code:'AAAABBCCDD',players:roster},hostProfile=SAVE,sessions=roster.map((p,i)=>{SAVE=i?Object.assign(freshSave(2026),{team:{num:100+i,name:'Testing'}}):hostProfile;return new OfficialSession(offer,p.id,mode,()=>{})}),host=sessions[0];SAVE=hostProfile;
    for(const s of sessions)s.relay.send=p=>{for(const other of sessions)if(other!==s&&!other.closed)other.receive(JSON.parse(JSON.stringify(p)));return true};
    for(const member of host.members.values())member.joined=true;
    host.start();assert(sessions.every(s=>s.config),'all players receive configuration');
@@ -85,7 +85,7 @@ globalThis.sessionChecks=()=>{
    assert(sessions.every(s=>s.run.m.over),'every '+mode+'v'+mode+' client finishes');
    const snapshot=s=>JSON.stringify({n:s.run.n,score:[s.run.m.total('B'),s.run.m.total('T')],bots:s.run.m.robots.map(r=>[r.x,r.y,r.durability])});
    assert(sessions.every(s=>snapshot(s)===snapshot(host)),'all '+mode+'v'+mode+' positions, scores and wear agree');
-   const before=SAVE.credits,reward=host.settle();assert(SAVE.credits===before+reward.total,'official reward paid');host.settle();assert(SAVE.credits===before+reward.total,'official reward paid only once');
+   const before=SAVE.credits,reward=host.settle();assert(host.settled&&reward.total>0,'official reward paid at simulation completion');host.settle();assert(SAVE.credits===before,'official reward paid only once');
    assert(SAVE.rec.played===1,'official record updated once');
    for(const s of sessions)s.closed=true;
    console.log('PASS: complete '+mode+'v'+mode+' synchronization, ownership, wear and idempotent rewards');

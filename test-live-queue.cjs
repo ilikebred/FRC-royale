@@ -11,7 +11,7 @@ vm.runInContext("SAVE=freshSave(2026);SAVE.team={num:999999,name:'Relay test'};s
   for(let i=0;i<mode*2;i++){
    let lastStatus='';const status=message=>{if(message!==lastStatus){console.log('client '+i+': '+message);lastStatus=message}};
    const q=new sandbox.Queue(mode,status,(offer,id)=>{found.push({code:offer.code,id});if(found.length===mode*2)resolve();const session=new sandbox.Session(offer,id,mode,status);sessions.push(session);session.connect().catch(e=>session.fail(e.message));return session});
-   q.team.condition=97.12345678901234+i*.001;
+   q.team.condition=97.12345678901234+i*.001;q.rp=32+i;
    q.relay.code=channel;queues.push(q);
   }
   let timeout;

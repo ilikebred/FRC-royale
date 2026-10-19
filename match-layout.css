@@ -1,4 +1,5 @@
 /* Match controls support the field, while retaining usable drag targets. */
+.rank-heading{display:flex;align-items:center;gap:10px;line-height:1.2}.rank-heading strong{font-size:17px}.rank-heading small{display:block;color:var(--muted);font-size:11px;margin-top:3px}.rank-badge{display:inline-block;width:44px;height:48px;flex:none;vertical-align:middle}.pit-rank .lb{position:relative;padding-left:54px}.pit-rank .rank-heading .rank-badge{position:absolute;left:0;top:0}.pit-rank .rank-heading small{display:none}.queue-rank{display:flex;align-items:center;gap:10px}.queue-rank p{margin:0}.rank-result{display:flex;align-items:center;justify-content:center;gap:10px;margin:10px 0}
 #app:has(#fc),#app:has(#online-field){max-width:none;width:100%;min-height:100dvh}
 .online-match{max-width:none}
 body #app:has(.fieldwrap) .mhud{padding:4px 8px;gap:6px}

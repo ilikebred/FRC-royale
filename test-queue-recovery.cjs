@@ -8,7 +8,7 @@ SAVE=freshSave(2026);SAVE.team={num:254,name:'Queue regression'};
 const make=id=>{const q=new PublicQueue(1,message=>q.message=message,()=>({started:false}));q.id=id;q.sent=[];q.send=(kind,data={})=>q.sent.push({kind,...data});return q};
 const a='00000000000000000001',b='00000000000000000002',c='00000000000000000003';
 const packet=(id,kind,data)=>({id,kind,q:QUEUE_VERSION,year:2026,mode:1,...data});
-const offer=(host,guest,code,team=guest.team)=>packet(host,'offer',{offer:{code,players:[{id:host,team:queueTeam()},{id:guest.id,team}]}});
+const offer=(host,guest,code,team=guest.team)=>packet(host,'offer',{offer:{code,players:[{id:host,team:queueTeam(),rp:0},{id:guest.id,team,rp:guest.rp}]}});
 // The host retried, but the guest still remembers the expired proposal.
 const guest=make(c);guest.receive(offer(a,guest,'AAAAAAAAAA'));guest.receive(offer(a,guest,'BBBBBBBBBB'));
 assert(guest.offer.code==='BBBBBBBBBB'&&guest.sent.at(-1).kind==='accept','same leader retry replaces the stale offer');
@@ -24,7 +24,7 @@ const mismatch=make(c);mismatch.receive(offer(a,mismatch,'FFFFFFFFFF',reordered)
 // Repeated missing confirmations must terminate with a recovery action.
 const leader=make(a),realNow=Date.now;let now=100000;Date.now=()=>now;
 try{
- for(let n=0;n<4&&!leader.closed;n++){leader.players.set(b,{id:b,team:queueTeam(),seen:now});leader.pulse();now+=10000}
+ for(let n=0;n<4&&!leader.closed;n++){leader.players.set(b,{id:b,team:queueTeam(),rp:0,seen:now});leader.pulse();now+=10000}
  assert(leader.closed&&leader.message.includes('timed out'),'confirmation retries are bounded');
  assert(leader.sent.some(p=>p.kind==='release'),'expired host offers are explicitly released');
 }finally{Date.now=realNow}

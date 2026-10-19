@@ -1,6 +1,25 @@
 /* Public discovery uses the configured Supabase relay. Matches are browser-hosted. */
-const QUEUE_VERSION=2;
+const QUEUE_VERSION=3;
 let MATCH_QUEUE=null;
+const validQueueRP=rp=>Number.isSafeInteger(rp)&&rp>=0;
+function rankedCandidates(players,id,count){
+  const sorted=players.slice().sort((a,b)=>a.rp-b.rp||a.id.localeCompare(b.id)),groups=[];
+  for(let i=0;i+count<=sorted.length;i++){
+    const group=sorted.slice(i,i+count);
+    if(group.some(p=>p.id===id)&&closeRanks(group[0].rp,group.at(-1).rp))groups.push(group);
+  }
+  groups.sort((a,b)=>(rankPosition(a.at(-1).rp)-rankPosition(a[0].rp))-(rankPosition(b.at(-1).rp)-rankPosition(b[0].rp))||a.map(p=>p.id).sort().join('').localeCompare(b.map(p=>p.id).sort().join('')));
+  return (groups[0]||[]).sort((a,b)=>a.id.localeCompare(b.id));
+}
+function balancedRoster(players,mode){
+  const host=players[0],rest=players.slice(1);let best=null,gap=Infinity;
+  for(let mask=0;mask<1<<rest.length;mask++){
+    const blue=[host,...rest.filter((_,i)=>mask>>i&1)];if(blue.length!==mode)continue;
+    const red=rest.filter((_,i)=>!(mask>>i&1)),score=Math.abs(blue.reduce((n,p)=>n+rankPosition(p.rp),0)-red.reduce((n,p)=>n+rankPosition(p.rp),0));
+    if(score<gap){gap=score;best=[...blue,...red]}
+  }
+  return best;
+}
 function queueTeam(){return onlineTeam({num:Number(SAVE.team.num),name:SAVE.team.name,build:myBuild(),color:SAVE.color,auto:autoById(SAVE.autoSel),material:materialOf(SAVE.material).id,condition:robotCondition(SAVE)},curYear())}
 function sameQueueTeam(a,b,year){
   // Compare normalized values, not JSON text or transport key order. Tiny
@@ -15,7 +34,7 @@ function sameQueueTeam(a,b,year){
 }
 class PublicQueue{
   constructor(mode,status,found){
-    this.mode=mode;this.status=status;this.found=found;this.id=onlineId();this.year=curYear();this.team=queueTeam();this.players=new Map();this.closed=false;
+    this.mode=mode;this.status=status;this.found=found;this.id=onlineId();this.year=curYear();this.team=queueTeam();this.rp=Math.max(0,Math.floor(SAVE.trophies||0));this.players=new Map();this.closed=false;
     this.relay=new MatchRelay('QUEUE-'+QUEUE_VERSION+'-'+this.year+'-'+mode,p=>this.receive(p),e=>this.fail(e));
   }
   async connect(){await this.relay.connect();if(this.closed)return;this.pulse();this.timer=setInterval(()=>this.pulse(),1000)}
@@ -24,16 +43,17 @@ class PublicQueue{
     if(this.closed)return;
     const now=Date.now();
     if(this.committed){this.send('commit',{offer:this.offer});if(this.session?.started||now-this.commitAt>30000)this.close();return}
-    this.players.set(this.id,{id:this.id,team:this.team,seen:now});
+    this.players.set(this.id,{id:this.id,team:this.team,rp:this.rp,seen:now});
     for(const [id,p] of this.players)if(now-p.seen>6500)this.players.delete(id);
     if(this.offer&&now-this.offerAt>9000){
       if(this.offer.players[0].id===this.id){this.send('release',{code:this.offer.code});this.retries=(this.retries||0)+1;if(this.retries>=3){this.fail('Match confirmation timed out. Both players should reload the latest game version and search again.');return}}
       this.offer=null;this.accepted=null;
     }
-    this.send('search',{team:this.team});
-    this.status(this.offer?'Confirming players'+(this.accepted?' · '+this.accepted.size+' / '+this.mode*2:'')+'…':Math.min(this.players.size,this.mode*2)+' / '+this.mode*2+' players · searching');
-    const candidates=[...this.players.values()].sort((a,b)=>a.id.localeCompare(b.id)).slice(0,this.mode*2);
-    if(!this.offer&&candidates.length===this.mode*2&&candidates[0].id===this.id){this.offer={code:onlineId().slice(0,10).toUpperCase(),players:candidates.map(({id,team})=>({id,team}))};this.offerAt=now;this.accepted=new Set([this.id])}
+    this.send('search',{team:this.team,rp:this.rp});
+    const candidates=rankedCandidates([...this.players.values()],this.id,this.mode*2);
+    let nearby=candidates.length;for(let count=this.mode*2-1;!nearby&&count>0;count--)nearby=rankedCandidates([...this.players.values()],this.id,count).length;
+    this.status(this.offer?'Confirming players'+(this.accepted?' · '+this.accepted.size+' / '+this.mode*2:'')+'…':nearby+' / '+this.mode*2+' compatible players · searching');
+    if(!this.offer&&candidates.length===this.mode*2&&candidates[0].id===this.id){this.offer={code:onlineId().slice(0,10).toUpperCase(),players:balancedRoster(candidates,this.mode).map(({id,team,rp})=>({id,team,rp}))};this.offerAt=now;this.accepted=new Set([this.id])}
     if(this.offer?.players[0].id===this.id){
       this.send('offer',{offer:this.offer});
       if(this.accepted.size===this.mode*2){this.committed=true;this.commitAt=now;this.send('commit',{offer:this.offer});this.launch()}
@@ -42,19 +62,20 @@ class PublicQueue{
   receive(p){
     if(this.closed||!p||p.q!==QUEUE_VERSION||p.year!==this.year||p.mode!==this.mode||!/^[a-f0-9]{20}$/.test(p.id)||p.id===this.id)return;
     try{
-      if(p.kind==='search'&&!this.committed&&this.players.size<128){this.players.set(p.id,{id:p.id,team:onlineTeam(p.team,this.year),seen:Date.now()});return}
+      if(p.kind==='search'&&!this.committed&&(this.players.has(p.id)||this.players.size<128)&&validQueueRP(p.rp)&&closeRanks(p.rp,this.rp)){this.players.set(p.id,{id:p.id,team:onlineTeam(p.team,this.year),rp:p.rp,seen:Date.now()});return}
       if(p.kind==='cancel'){this.players.delete(p.id);if(this.offer?.players.some(x=>x.id===p.id)&&!this.committed){this.offer=null;this.accepted=null}return}
       if(p.kind==='release'&&!this.committed&&this.offer?.players[0].id===p.id&&this.offer.code===p.code){this.offer=null;this.accepted=null;return}
       if(p.kind==='decline'&&!this.committed&&p.host===this.id&&this.offer?.code===p.code&&this.offer.players.some(x=>x.id===p.id)){this.fail('A player could not confirm the robot loadout. Both players should reload the latest game version and search again.');return}
       if(p.kind==='offer'&&!this.committed){
         const o=p.offer;if(!o||!/^[A-F0-9]{10}$/.test(o.code)||!Array.isArray(o.players)||o.players.length!==this.mode*2||o.players[0].id!==p.id||new Set(o.players.map(x=>x.id)).size!==o.players.length||!o.players.some(x=>x.id===this.id))return;
         if(o.players.some(x=>!/^[a-f0-9]{20}$/.test(x.id)))return;
+        if(o.players.some(x=>!validQueueRP(x.rp))||!closeRanks(Math.min(...o.players.map(x=>x.rp)),Math.max(...o.players.map(x=>x.rp)))||o.players.find(x=>x.id===this.id).rp!==this.rp)return;
         // A retry from the same leader replaces its old offer. Competing
         // leaders converge on the lower ID instead of locking each other out.
         if(this.offer&&this.offer.code!==o.code&&this.offer.players[0].id.localeCompare(p.id)<0)return;
         const own=o.players.find(x=>x.id===this.id);
         if(!sameQueueTeam(own.team,this.team,this.year)){this.send('decline',{code:o.code,host:p.id});this.fail('Your robot loadout could not be confirmed. Reload the latest game version and search again.');return}
-        const players=o.players.map(x=>({id:x.id,team:onlineTeam(x.team,this.year)}));
+        const players=o.players.map(x=>({id:x.id,team:onlineTeam(x.team,this.year),rp:x.rp}));
         this.offer={code:o.code,players};this.accepted=null;this.offerAt=Date.now();this.send('accept',{code:o.code,host:p.id});return;
       }
       if(p.kind==='accept'&&p.host===this.id&&this.offer?.code===p.code&&this.offer.players.some(x=>x.id===p.id)){this.accepted?.add(p.id);return}
@@ -67,7 +88,8 @@ class PublicQueue{
 }
 function screenMatchmaking(){
   MATCH_QUEUE?.close();MATCH_QUEUE=null;ONLINE?.close();ONLINE=null;PIT_SECTION=null;
-  show('<main class="pad online-lobby"><button id="queue-back">'+ICONS.back+' Back to pit</button><h1>Official match</h1><p>Face other players. Each alliance always has three robots; AI fills the remaining slots.</p><div class="queue-modes" role="group" aria-label="Players per alliance">'+[1,2,3].map(n=>'<button data-mode="'+n+'" aria-pressed="'+(n===1)+'">'+n+'v'+n+'</button>').join('')+'</div><p id="queue-description">One player and two AI robots per alliance.</p><p>Earn coins for your contribution, objectives, result, and robot care. Damage carries back to the workbench.</p><button class="btn-primary" id="queue-start">Find match</button><p id="queue-status" role="status" aria-live="polite">Ready to search</p><button class="queue-cancel" id="queue-cancel" hidden>Cancel search</button><p class="muted">Players must be searching in the same season and mode. The queue waits for real players; it never substitutes an AI opponent.</p></main>');
+  show('<main class="pad online-lobby"><button id="queue-back">'+ICONS.back+' Back to pit</button><h1>Official match</h1><p>Face other players. Each alliance always has three robots; AI fills the remaining slots.</p><div class="queue-modes" role="group" aria-label="Players per alliance">'+[1,2,3].map(n=>'<button data-mode="'+n+'" aria-pressed="'+(n===1)+'">'+n+'v'+n+'</button>').join('')+'</div><p id="queue-description">One player and two AI robots per alliance.</p><p>Earn coins for your contribution, objectives, result, and robot care. Damage carries back to the workbench.</p><button class="btn-primary" id="queue-start">Find match</button><p id="queue-status" role="status" aria-live="polite">Ready to search</p><button class="queue-cancel" id="queue-cancel" hidden>Cancel search</button><p class="muted">Players must be searching in the same season and mode, with similar RP progress. We wait for a close match instead of widening to distant ranks.</p></main>');
+  const rank=document.createElement('div');rank.className='queue-rank';rank.innerHTML=rankBadge(SAVE.trophies)+'<p><strong>'+leagues()[leagueOf(SAVE.trophies)].name+'</strong> · '+SAVE.trophies+' RP<br><small>Searching for players close to your rank progress.</small></p>';app.querySelector('.queue-modes').before(rank);
   let mode=1;
   const status=t=>{if($('#queue-status'))$('#queue-status').textContent=t};
   const reset=()=>{MATCH_QUEUE?.close();MATCH_QUEUE=null;ONLINE?.close();ONLINE=null;screenMatchmaking()};
@@ -91,8 +113,11 @@ class OfficialSession extends FriendSession{
     this.ownIndex=(this.localAlliance==='B'?0:3)+this.roster.findIndex(p=>p.id===id)%mode;
     this.members=new Map(this.roster.filter(p=>p.id!==id).map(p=>[p.id,{seen:Date.now(),joined:false,ready:false,ack:0,commandSeq:0}]));
     this.team=this.roster.find(p=>p.id===id).team;
+    this.profile=SAVE;
   }
   canControl(index){return this.config?.owners[index]===this.id||(!this.config?.owners[index]&&this.run?.m.robots[index]?.A===this.localAlliance)}
+  advanceClock(now){super.advanceClock(now);if(this.run?.m.over)this.settle()}
+  guestStep(){const stepped=super.guestStep();if(this.run?.m.over)this.settle();return stepped}
   async connect(){await this.relay.connect();if(this.closed)return;this.status('Match found. Connecting all players…');this.pulse();this.timer=setInterval(()=>this.pulse(),1000)}
   send(kind,data={}){return this.relay.send({v:ONLINE_VERSION,from:this.id,to:this.host?null:this.hostId,kind,...data})}
   sendTo(to,kind,data={}){return this.relay.send({v:ONLINE_VERSION,from:this.id,to,kind,...data})}
@@ -166,18 +191,24 @@ class OfficialSession extends FriendSession{
     for(const item of this.pending.splice(0)){const result=applyOnlineCommand(this.run,item.command,item.alliance,this.cooldowns);if(result?.msg){if(item.sender===this.id)toast(result.msg);else this.sendTo(item.sender,'notice',{message:result.msg})}else this.batch.commands.push({n:this.run.n,alliance:item.alliance,command:item.command})}
     this.run.step();
     if(this.run.n-this.batch.from>=6||this.run.m.over){this.batch.to=this.run.n;this.frames.push(this.batch);this.send('frame',{frame:this.batch});this.batch=null}
+    if(this.run.m.over)this.settle();
     return true;
   }
   settle(){
     if(this.settled||!this.run?.m.over||this.closed)return this.reward;
     const m=this.run.m,r=m.robots[this.ownIndex],result=m.total(r.A)>m.total(r.A==='B'?'T':'B')?'win':m.total(r.A)<m.total(r.A==='B'?'T':'B')?'loss':'tie';
-    this.settled=true;this.reward=performanceCoins(m,r,result);SAVE.credits+=this.reward.total;SAVE.condition=robotCondition(r.durability);
-    const rp=m.rpInfo(r.A).n,before=SAVE.trophies;SAVE.trophies+=rp;awardBanners(SAVE,before,SAVE.trophies);SAVE.rec.played++;SAVE.rec[result==='win'?'w':result==='loss'?'l':'t']++;SAVE.rec.rp+=rp;SAVE.rec.best=Math.max(SAVE.rec.best,m.total(r.A));persist();return this.reward;
+    const p=this.profile,rp=m.rpInfo(r.A).n,before=p.trophies,oldRank=leagueOf(before),matchId='online-'+this.year+'-'+this.code+'-'+this.config.seed;
+    const existing=(p.matches||[]).find(x=>x.id===matchId);if(existing){this.settled=true;this.reward=existing.reward;return this.reward}
+    this.reward=performanceCoins(m,r,result);p.credits+=this.reward.total;p.condition=robotCondition(r.durability);
+    p.trophies+=rp;const newBanners=awardBanners(p,before,p.trophies);p.rec.played++;p.rec[result==='win'?'w':result==='loss'?'l':'t']++;p.rec.rp+=rp;p.rec.best=Math.max(p.rec.best,m.total(r.A));
+    const data=onlineResultData(this),rank=leagueOf(p.trophies),side=s=>({col:s.name,color:s.color,total:s.score,foulRecv:s.fouls,extras:s.extras,bots:s.bots});
+    const summary={id:matchId,date:Date.now(),official:true,mode:this.mode,practice:false,qual:p.rec.played,v:3,res:result,my:data.us.score,th:data.them.score,myColor:r.A==='B'?'blue':'red',us:side(data.us),them:side(data.them),cols:data.cols,rows:data.rows,chips:data.chips,rpN:rp,tr:rp,cr:this.reward.total,reward:this.reward,trophies:p.trophies,goal:levelGoal(rank,p),league:leagues(p)[oldRank].name,leagueAfter:leagues(p)[rank].name,promoted:rank>oldRank,newBanners,team:{num:p.team.num,name:p.team.name},auto:'Online autonomous',meText:m.meText(r,'Online autonomous'),season:{year:this.year,name:SEASONS[this.year].name},replay:null};
+    p.matches=[summary,...(p.matches||[])].slice(0,100);p.updated=Date.now();this.settled=true;persist();return this.reward;
   }
   close(){
     if(this.closed)return;
     if(this.run?.m.over&&!this.settled)this.settle();
-    if(this.run){const robot=this.run.m.robots[this.ownIndex];SAVE.condition=robotCondition(robot?.durability||robot?.tm);persist()}
+    if(this.run){const robot=this.run.m.robots[this.ownIndex];this.profile.condition=robotCondition(robot?.durability||robot?.tm);persist()}
     super.close();
   }
 }
