@@ -1,7 +1,18 @@
 /* Public discovery uses the configured Supabase relay. Matches are browser-hosted. */
-const QUEUE_VERSION=1;
+const QUEUE_VERSION=2;
 let MATCH_QUEUE=null;
 function queueTeam(){return onlineTeam({num:Number(SAVE.team.num),name:SAVE.team.name,build:myBuild(),color:SAVE.color,auto:autoById(SAVE.autoSel),material:materialOf(SAVE.material).id,condition:robotCondition(SAVE)},curYear())}
+function sameQueueTeam(a,b,year){
+  // Compare normalized values, not JSON text or transport key order. Tiny
+  // floating-point differences in condition/path coordinates are immaterial.
+  const same=(x,y)=>{
+    if(typeof x==='number'&&typeof y==='number')return Math.abs(x-y)<=1e-6;
+    if(x===y)return true;
+    if(!x||!y||typeof x!=='object'||typeof y!=='object'||Array.isArray(x)!==Array.isArray(y))return false;
+    const keys=Object.keys(x);return keys.length===Object.keys(y).length&&keys.every(k=>Object.hasOwn(y,k)&&same(x[k],y[k]));
+  };
+  return same(onlineTeam(a,year),onlineTeam(b,year));
+}
 class PublicQueue{
   constructor(mode,status,found){
     this.mode=mode;this.status=status;this.found=found;this.id=onlineId();this.year=curYear();this.team=queueTeam();this.players=new Map();this.closed=false;
@@ -15,9 +26,12 @@ class PublicQueue{
     if(this.committed){this.send('commit',{offer:this.offer});if(this.session?.started||now-this.commitAt>30000)this.close();return}
     this.players.set(this.id,{id:this.id,team:this.team,seen:now});
     for(const [id,p] of this.players)if(now-p.seen>6500)this.players.delete(id);
-    if(this.offer&&now-this.offerAt>9000){this.offer=null;this.accepted=null}
+    if(this.offer&&now-this.offerAt>9000){
+      if(this.offer.players[0].id===this.id){this.send('release',{code:this.offer.code});this.retries=(this.retries||0)+1;if(this.retries>=3){this.fail('Match confirmation timed out. Both players should reload the latest game version and search again.');return}}
+      this.offer=null;this.accepted=null;
+    }
     this.send('search',{team:this.team});
-    this.status(this.offer?'Confirming players…':this.players.size+' / '+this.mode*2+' players · searching');
+    this.status(this.offer?'Confirming players'+(this.accepted?' · '+this.accepted.size+' / '+this.mode*2:'')+'…':Math.min(this.players.size,this.mode*2)+' / '+this.mode*2+' players · searching');
     const candidates=[...this.players.values()].sort((a,b)=>a.id.localeCompare(b.id)).slice(0,this.mode*2);
     if(!this.offer&&candidates.length===this.mode*2&&candidates[0].id===this.id){this.offer={code:onlineId().slice(0,10).toUpperCase(),players:candidates.map(({id,team})=>({id,team}))};this.offerAt=now;this.accepted=new Set([this.id])}
     if(this.offer?.players[0].id===this.id){
@@ -30,18 +44,24 @@ class PublicQueue{
     try{
       if(p.kind==='search'&&!this.committed&&this.players.size<128){this.players.set(p.id,{id:p.id,team:onlineTeam(p.team,this.year),seen:Date.now()});return}
       if(p.kind==='cancel'){this.players.delete(p.id);if(this.offer?.players.some(x=>x.id===p.id)&&!this.committed){this.offer=null;this.accepted=null}return}
+      if(p.kind==='release'&&!this.committed&&this.offer?.players[0].id===p.id&&this.offer.code===p.code){this.offer=null;this.accepted=null;return}
+      if(p.kind==='decline'&&!this.committed&&p.host===this.id&&this.offer?.code===p.code&&this.offer.players.some(x=>x.id===p.id)){this.fail('A player could not confirm the robot loadout. Both players should reload the latest game version and search again.');return}
       if(p.kind==='offer'&&!this.committed){
         const o=p.offer;if(!o||!/^[A-F0-9]{10}$/.test(o.code)||!Array.isArray(o.players)||o.players.length!==this.mode*2||o.players[0].id!==p.id||new Set(o.players.map(x=>x.id)).size!==o.players.length||!o.players.some(x=>x.id===this.id))return;
         if(o.players.some(x=>!/^[a-f0-9]{20}$/.test(x.id)))return;
-        if(this.offer&&this.offer.code!==o.code)return;
-        const own=o.players.find(x=>x.id===this.id);if(JSON.stringify(onlineTeam(own.team,this.year))!==JSON.stringify(this.team))return;
-        this.offer={code:o.code,players:o.players.map(x=>({id:x.id,team:onlineTeam(x.team,this.year)}))};this.offerAt=Date.now();this.send('accept',{code:o.code,host:p.id});return;
+        // A retry from the same leader replaces its old offer. Competing
+        // leaders converge on the lower ID instead of locking each other out.
+        if(this.offer&&this.offer.code!==o.code&&this.offer.players[0].id.localeCompare(p.id)<0)return;
+        const own=o.players.find(x=>x.id===this.id);
+        if(!sameQueueTeam(own.team,this.team,this.year)){this.send('decline',{code:o.code,host:p.id});this.fail('Your robot loadout could not be confirmed. Reload the latest game version and search again.');return}
+        const players=o.players.map(x=>({id:x.id,team:onlineTeam(x.team,this.year)}));
+        this.offer={code:o.code,players};this.accepted=null;this.offerAt=Date.now();this.send('accept',{code:o.code,host:p.id});return;
       }
       if(p.kind==='accept'&&p.host===this.id&&this.offer?.code===p.code&&this.offer.players.some(x=>x.id===p.id)){this.accepted?.add(p.id);return}
       if(p.kind==='commit'&&!this.committed&&this.offer?.players[0].id===p.id&&p.offer?.code===this.offer.code){this.committed=true;this.launch();this.close()}
     }catch{/* Malformed discovery messages never enter a match. */}
   }
-  launch(){if(this.session)return;this.session=this.found(this.offer,this.id,this.mode)}
+  launch(){if(this.session)return;try{this.session=this.found(this.offer,this.id,this.mode)}catch{this.fail('The match could not open. Cancel and search again.')}}
   fail(message){this.close();this.status(message+' You can retry the queue.')}
   close(){if(this.closed)return;if(!this.committed)this.send('cancel');this.closed=true;clearInterval(this.timer);this.relay.close()}
 }
