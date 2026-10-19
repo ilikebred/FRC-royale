@@ -32,3 +32,9 @@ Run `node check-backend.cjs` for read-only checks of the leaderboard views/table
 Run `node build.cjs`, then deploy the resulting `dist/` directory through your website host. This backend change does not transfer ownership of the website hosting account or publish a new website deployment. Both players must load the updated build to use the same backend. The service-worker cache version has been bumped to refresh installed copies after deployment.
 
 Match simulation still runs in the host player's browser; Supabase relays messages. Moving the relay project does not turn the game into a dedicated-server simulation.
+
+## Public matchmaking
+
+Official Play now discovers players over season/mode-specific Realtime channels. 1v1 needs two players, 2v2 four, and 3v3 six. No database schema is required for this queue. `node test-live-queue.cjs` verified room agreement with all three sizes on this project, using temporary isolated channels.
+
+Official rewards, condition, materials, and rank are stored in the local game profile. The host orders simulation inputs and clients reproduce the match. These results are not server-validated and should not be treated as a secure competitive economy. An authoritative server and authenticated reward storage would be needed for that. Missing leaderboard tables/functions listed above remain separate from working public matchmaking.

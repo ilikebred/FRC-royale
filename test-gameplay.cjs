@@ -2,6 +2,7 @@ const fs=require('fs');
 // Reuse the simulation-only DOM harness; none of the existing test cases run here.
 const bootstrap=fs.readFileSync('test.cjs','utf8').split('const packedClips=')[0];
 const {sandbox,vm}=new Function('require',bootstrap+';return {sandbox,vm}')(require);
+sandbox.SKIP_FULL_MATCHES=process.argv.includes('--quick');
 for(const file of ['waypoint-auto.js','boost-targeting.js','multiplayer.js','gameplay.js','matchmaking.js'])vm.runInContext(fs.readFileSync(file,'utf8'),sandbox);
 vm.runInContext(`
 const assert=(ok,message)=>{if(!ok)throw Error(message)};
@@ -28,10 +29,28 @@ const teams=Array.from({length:6},(_,i)=>({num:100+i,name:'Robot',color:'#336699
  const low=performanceCoins(run.m,run.me,'loss');run.me.scored+=20;const high=performanceCoins(run.m,run.me,'loss');assert(high.total>low.total,'personal performance increases coins');
 }
 console.log('PASS: impacts, materials, contact cooldown, heat, cooling, breakage, replay compatibility and performance rewards');
+{
+ SAVE.condition=17;const roster=[{id:'00000000000000000001',team:queueTeam()},{id:'00000000000000000002',team:{...queueTeam(),num:987}}];
+ const session=new OfficialSession({code:'ABCDEF1234',players:roster},roster[0].id,1,()=>{});session.send=()=>true;session.start();
+ const before=SAVE.credits;session.close();assert(SAVE.condition===17,'leaving before first tick does not repair robot');assert(SAVE.credits===before,'unfinished match gives no reward');
+ const complete=new OfficialSession({code:'ABCDEF5678',players:roster},roster[0].id,1,()=>{});complete.send=()=>true;complete.start();complete.run.step();complete.run.m.over=true;complete.close();
+ assert(complete.settled&&SAVE.credits>before,'completed hidden match settles on close');const paid=SAVE.credits;complete.close();complete.settle();assert(SAVE.credits===paid,'closing twice never duplicates reward');
+ console.log('PASS: leaving preserves damage, no unfinished reward, final disconnect settlement and duplicate protection');
+}
+{
+ const summary=screenSummary,telemetry=tele,sync=lbSync;screenSummary=()=>{};tele=()=>{};lbSync=()=>{throw Error('Practice synced leaderboard')};
+ SAVE=freshSave(2026);SAVE.team={num:254,name:'Testing'};SAVE.condition=42;const credits=SAVE.credits,record=JSON.stringify(SAVE.rec),rp=SAVE.trophies;
+ PENDING={practice:true};const run=new SimRun(2026,teams,19,{trophies:0,durability:1});run.step();run.me.durability.condition=12;
+ screenResults(run.m,{B:'#3E8BFF',T:'#E5484D'},'blue',run);
+ assert(SAVE.credits===credits&&SAVE.matches[0].cr===0,'practice awards no coins');
+ assert(SAVE.condition===42&&JSON.stringify(SAVE.rec)===record&&SAVE.trophies===rp,'practice preserves condition, record and rank');
+ screenSummary=summary;tele=telemetry;lbSync=sync;PENDING=null;
+ console.log('PASS: actual practice settlement preserves coins, condition, record and ranking');
+}
 globalThis.queueChecks=()=>{
  const bus=new Map();
  MatchRelay.prototype.connect=async function(){this.joined=true;const peers=bus.get(this.code)||[];peers.push(this);bus.set(this.code,peers)};
- MatchRelay.prototype.send=function(p){for(const peer of bus.get(this.code)||[])if(peer!==this&&!peer.closed)peer.onMessage(JSON.parse(JSON.stringify(p)));return true};
+ MatchRelay.prototype.send=function(p){for(const peer of bus.get(this.code)||[])if(peer!==this&&!peer.closed)peer.onMessage(JSON.parse(JSON.stringify(p,(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.entries(v).sort(([a],[b])=>a.localeCompare(b))):v)));return true};
  MatchRelay.prototype.close=function(){this.closed=true;this.joined=false};
  for(const mode of [1,2,3]){
    const found=[],queues=Array.from({length:mode*2},()=>new PublicQueue(mode,()=>{},(offer,id)=>{found.push({offer,id});return {started:false}}));
@@ -71,7 +90,7 @@ globalThis.sessionChecks=()=>{
    for(const s of sessions)s.closed=true;
    console.log('PASS: complete '+mode+'v'+mode+' synchronization, ownership, wear and idempotent rewards');
  }
-};sessionChecks();
+};if(!SKIP_FULL_MATCHES)sessionChecks();
 `,sandbox);
 const html=fs.readFileSync('index.html','utf8');
 if(!html.includes('let cr=practice?0:performanceCoins')||!html.includes('t.isPlayer&&!PENDING.practice?robotCondition(SAVE):100'))throw Error('Practice must award no coins and begin undamaged');

@@ -62,6 +62,7 @@ const gameplayRecord=SimRun.prototype.record;
 SimRun.prototype.record=function(){return {...gameplayRecord.call(this),durability:this.ctx.durability}};
 const gameplayApply=SimRun.prototype.apply;
 SimRun.prototype.apply=function(type,args){
+  if(this.ctx.durability===1&&!this.m.robots[0]?.durability)initDurability(this);
   const target=type==='b'&&Number.isInteger(args[1])?this.m.robots[args[1]]:this.me;
   if(target?.durability?.condition<=0)return {msg:'Robot broken — repair it in the workbench after the match'};
   return gameplayApply.call(this,type,args);
@@ -74,7 +75,7 @@ drive2026=function(m,r,dt){
   if(lost>8&&m.blocked(r,r.x+vx*dt,r.y+vy*dt))impactRobot(m,r,lost);
 };
 function durabilityHUD(root,robot){
-  const meter=document.createElement('div');meter.className='robot-condition';meter.innerHTML='<span></span><meter min="0" max="100" aria-label="Robot condition"></meter><span></span><meter min="0" max="100" aria-label="Robot heat"></meter>';
+  const meter=document.createElement('div');meter.className='robot-condition';meter.innerHTML='<span></span><meter min="0" max="100" low="35" high="70" optimum="100" aria-label="Robot condition"></meter><span></span><meter min="0" max="100" low="60" high="85" optimum="0" aria-label="Robot heat"></meter>';
   const place=root.querySelector('.hubline');if(place)place.append(meter);
   return ()=>{const d=robot.durability||{condition:100,heat:0};const labels=meter.querySelectorAll('span'),bars=meter.querySelectorAll('meter');labels[0].textContent=d.condition<=0?'BROKEN':Math.ceil(d.condition)+'% condition';labels[1].textContent=Math.round(d.heat)+'% heat'+(d.heat>=85?' · cooling needed':'');bars[0].value=d.condition;bars[1].value=d.heat;meter.classList.toggle('damaged',d.condition<35||d.heat>=85)};
 }

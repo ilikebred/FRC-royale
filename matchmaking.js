@@ -34,7 +34,7 @@ class PublicQueue{
         const o=p.offer;if(!o||!/^[A-F0-9]{10}$/.test(o.code)||!Array.isArray(o.players)||o.players.length!==this.mode*2||o.players[0].id!==p.id||new Set(o.players.map(x=>x.id)).size!==o.players.length||!o.players.some(x=>x.id===this.id))return;
         if(o.players.some(x=>!/^[a-f0-9]{20}$/.test(x.id)))return;
         if(this.offer&&this.offer.code!==o.code)return;
-        const own=o.players.find(x=>x.id===this.id);if(JSON.stringify(own.team)!==JSON.stringify(this.team))return;
+        const own=o.players.find(x=>x.id===this.id);if(JSON.stringify(onlineTeam(own.team,this.year))!==JSON.stringify(this.team))return;
         this.offer={code:o.code,players:o.players.map(x=>({id:x.id,team:onlineTeam(x.team,this.year)}))};this.offerAt=Date.now();this.send('accept',{code:o.code,host:p.id});return;
       }
       if(p.kind==='accept'&&p.host===this.id&&this.offer?.code===p.code&&this.offer.players.some(x=>x.id===p.id)){this.accepted?.add(p.id);return}
@@ -73,6 +73,7 @@ class OfficialSession extends FriendSession{
     this.team=this.roster.find(p=>p.id===id).team;
   }
   canControl(index){return this.config?.owners[index]===this.id||(!this.config?.owners[index]&&this.run?.m.robots[index]?.A===this.localAlliance)}
+  async connect(){await this.relay.connect();if(this.closed)return;this.status('Match found. Connecting all players…');this.pulse();this.timer=setInterval(()=>this.pulse(),1000)}
   send(kind,data={}){return this.relay.send({v:ONLINE_VERSION,from:this.id,to:this.host?null:this.hostId,kind,...data})}
   sendTo(to,kind,data={}){return this.relay.send({v:ONLINE_VERSION,from:this.id,to,kind,...data})}
   pulse(){
@@ -155,7 +156,8 @@ class OfficialSession extends FriendSession{
   }
   close(){
     if(this.closed)return;
-    if(this.run){SAVE.condition=robotCondition(this.run.m.robots[this.ownIndex]?.durability);persist()}
+    if(this.run?.m.over&&!this.settled)this.settle();
+    if(this.run){const robot=this.run.m.robots[this.ownIndex];SAVE.condition=robotCondition(robot?.durability||robot?.tm);persist()}
     super.close();
   }
 }

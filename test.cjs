@@ -61,7 +61,7 @@ assert(fired('close',6,false,false)>fired('zone',3.6,false,false),'dumper has hi
 assert(fired('close',6,false,true)<=11,'defense chokes dumper output');
 assert(fired('zone',3.6,true,true)>=31,'turret sustains output against defense');
 console.log('PASS: acceleration, turn and travel bounds, braking to rest, mobile turret, stationary dumper, burst and defense tradeoffs');
-SAVE={credits:10};assert(TEST_CREDITS,'test credits default on');for(let i=0;i<100;i++)assert(spendCredits(1700),'unlimited purchases');assert(SAVE.credits===10,'real balance unchanged');assert(JSON.parse(JSON.stringify(SAVE)).credits===10,'finite saved balance');TEST_CREDITS=false;assert(!spendCredits(11),'normal mode insufficient balance');assert(spendCredits(3)&&SAVE.credits===7,'normal price deduction');TEST_CREDITS=true;SAVE=null;
+SAVE={credits:10};assert(!TEST_CREDITS,'real coin spending is the default');TEST_CREDITS=true;for(let i=0;i<100;i++)assert(spendCredits(1700),'unlimited purchases');assert(SAVE.credits===10,'real balance unchanged');assert(JSON.parse(JSON.stringify(SAVE)).credits===10,'finite saved balance');TEST_CREDITS=false;assert(!spendCredits(11),'normal mode insufficient balance');assert(spendCredits(3)&&SAVE.credits===7,'normal price deduction');TEST_CREDITS=true;SAVE=null;
 const curve=smoothRoute([{x:0,y:0},{x:5,y:0},{x:5,y:5}]);assert(curve.length>3,'curve sampling');assert(curve.some(p=>p.x<5&&p.y>0),'rounded corner');assert(smoothRoute([{x:0,y:0},{x:5,y:0},{x:5,y:5}],()=>true).length===3,'blocked curve fallback');
 const build={};for(const [k,id] of Object.entries(SEASONS[2026].starter.equip))build[k]={id,lv:1};build.drive={id:'swerve',lv:1};
 const navStats=buildStats(build,2026);

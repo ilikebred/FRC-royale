@@ -4,7 +4,21 @@
 
 The pit has a reference-inspired game lobby with large Workbench, Autonomous pathing, Leaderboards, and Settings buttons, a centered robot on a wheeled pit cart, rank progress above, and stats and match controls on the right. Light mode uses an ice-blue background and raised white controls; dark mode retains the same layout. Hardware and auto editing remain dedicated destinations, with part previews before purchase. Hopper models use folded side plates, a rear wall, sloped feed floor, rim rails, rivets, and capacity-specific widths.
 
-**Unlimited test credits are on by default.** The pit's **Test credits** switch returns to normal pricing. Test purchases and upgrades do not reduce your real balance, and the setting survives refreshes. Owned test parts remain available when testing is turned off. Weight limits still apply. Profiles that have acquired test parts are excluded from upstream leaderboard syncing.
+**Normal coin spending is the default.** The pit's Options menu still has a **Test credits** switch; an existing saved preference is preserved. Test purchases and upgrades do not reduce your real balance. Owned test parts remain available when testing is turned off. Weight limits still apply. Profiles that have acquired test parts are excluded from upstream leaderboard syncing.
+
+## Official matches, practice, and durability
+
+**Play** opens the public Supabase matchmaking queue. Choose 1v1 (one human plus two AI robots per alliance), 2v2 (two humans plus one AI), or 3v3 (all human drivers). Players must search in the same season, mode, and protocol version. The queue waits for real opponents and can be cancelled. Each person controls their robot and any AI teammate; they cannot drive another human's robot. Boosts can target any ally, with shared alliance cooldowns.
+
+Completed official matches pay coins based on personal contribution, match outcome, alliance objectives, robot condition, and foul penalties. The results screen shows the breakdown. Rewards apply once per session. Official matches update local RP and records; they do not submit results to the old creator's backend. Practice awards **zero coins and zero RP**, preserves the competitive record, starts with a healthy robot, and does not persist damage. Friendly room matches remain unranked.
+
+Robots have condition and heat meters. In 2026, hard impacts damage the frame and sustained firing/overdrive generates heat. At 85% heat, launcher output halves; continued overheating causes wear. Idling cools the robot. Below 35% condition, speed/intake/output fall to 65%; at zero the robot breaks until repaired. Official damage persists when returning to the pit, including leaving an unfinished match. The workbench offers repairs at two coins per missing condition point, Reinforced alloy (650 coins, 1.6× durability), and Titanium composite (1,600 coins, 2.5× durability). Material purchases do not refill condition. Older replay recordings retain their original simulation rules.
+
+Match controls are compact, and wide desktop windows turn the field horizontally to use more of the screen. Boosts keep their card appearance and drag cue.
+
+Matchmaking uses public Realtime discovery and a browser host, not a dedicated authoritative game server. Local saves and client-hosted results are not cheat-resistant; server-validated accounts/rewards remain a separate backend project. Closing the host browser or losing a player ends an unfinished match without rewards. See [BACKEND_SETUP.md](BACKEND_SETUP.md).
+
+Validation: `node test-gameplay.cjs` checks damage, replay compatibility, practice settlement, queue consensus, and complete 1v1/2v2/3v3 simulations. `node test-live-queue.cjs` checks real Supabase discovery using isolated temporary test channels (no database writes). `node test.cjs` runs the existing regression suite.
 
 FRC Royale adds an original blue-and-gold arena identity, crowned robot shield, light/dark themes, and equipment-specific robot models in the pit and match. The 2026 models include open dump trays, angled flywheel hoods, single/dual turret bearings, compliant intake rollers, frame rails, swerve modules, and open storage. Older seasons retain their original season-specific mechanisms.
 

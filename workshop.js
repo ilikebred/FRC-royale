@@ -1,5 +1,5 @@
 /* Local test economy: keep real credit balances finite and untouched. */
-let TEST_CREDITS=(()=>{try{return localStorage.getItem('frc-royale-test-credits')!=='off'}catch{return true}})();
+let TEST_CREDITS=(()=>{try{return localStorage.getItem('frc-royale-test-credits')==='on'}catch{return false}})();
 function creditLabel(){return TEST_CREDITS?'∞':String(SAVE.credits)}
 function canSpendCredits(cost){return TEST_CREDITS||SAVE.credits>=cost}
 function spendCredits(cost){if(!canSpendCredits(cost))return false;if(TEST_CREDITS)SAVE.testBuild=true;else SAVE.credits-=cost;return true}
